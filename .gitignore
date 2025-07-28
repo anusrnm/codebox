@@ -1,0 +1,82 @@
+# Global
+.DS_Store
+Thumbs.db
+*.log
+*.tmp
+*.swp
+*.swo
+*.bak
+
+# Node.js
+node_modules/
+npm-debug.log
+yarn-error.log
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+env/
+venv/
+ENV/
+.venv/
+
+# Go
+*.exe
+*.test
+*.out
+*.mod
+*.sum
+bin/
+
+# C/C++
+*.o
+*.obj
+*.exe
+*.dll
+*.so
+*.a
+*.lib
+*.out
+
+# VSCode
+.vscode/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Misc
+*.class
+*.jar
+*.war
+*.ear
+*.iml
+.idea/
+*.sublime-workspace
+*.sublime-project
+
+# OS generated
+ehthumbs.db
+Icon?
+
+# Archives
+*.zip
+*.tar.gz
+*.tar.bz2
+*.tar
+*.tgz
+*.7z
+*.rar
+
+# Test output
+coverage/
+*.lcov
+
+# Sonar
+.sonar/
+.sonarlint/
+
+# Others
+build/
+dist/
