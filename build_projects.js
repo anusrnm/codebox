@@ -54,32 +54,26 @@ async function runMavenCommand(dir, logFileStream, dryRun = false, lineIndex = n
     const start = performance.now();
     return new Promise((resolve) => {
         let child;
-        const isWin = process.platform === 'win32';
-        if (isWin) {
-            // child = spawn('cmd.exe', ['/c', fullCmd], { cwd: dir });
-            child = spawn(fullCmd, { cwd: dir, shell: true});
-        } else {
-            child = spawn(fullCmd, { cwd: dir, shell: true });
-        }
+        child = spawn(fullCmd, { cwd: dir, shell: true });
         let output = "";
         let hadError = false;
 
         const onStdout = (data) => {
             const str = data.toString();
             output += str;
-            logFileStream && logFileStream.write(str);
+            logFileStream?.write(str);
             emitter.emit('progress', { type: 'stdout', dir, data: str });
         };
         const onStderr = (data) => {
             const str = data.toString();
             output += str;
-            logFileStream && logFileStream.write(str);
+            logFileStream?.write(str);
             emitter.emit('progress', { type: 'stderr', dir, data: str });
         };
         const onError = (err) => {
             hadError = true;
             output += `\nProcess error: ${err.message}`;
-            logFileStream && logFileStream.write(`\nProcess error: ${err.message}`);
+            logFileStream?.write(`\nProcess error: ${err.message}`);
             emitter.emit('progress', { type: 'error', dir, error: err });
         };
         const onClose = (code) => {
@@ -228,49 +222,60 @@ async function buildInOrder(projects, quiet = false) {
             process.stdout.write(`\x1b[2K\r${finalText} [${inProgressCount}/${totalProjects}]\n`);
         }
         if (!quiet) {
+            function handleStart(evt) {
+                inProgressCount++;
+                if (isParallel) {
+                    process.stdout.write(`${BUILDING} ${evt.dir} with ${evt.cmd} [${inProgressCount}/${totalProjects}]\n`);
+                } else {
+                    startSpinner(`${evt.dir} with ${evt.cmd}`);
+                }
+            }
+
+            function handleDryRun(evt) {
+                if (isParallel) {
+                    process.stdout.write(`${DRY_RUN} Would run: ${evt.cmd} in ${evt.dir} [${inProgressCount}/${totalProjects}]\n`);
+                } else {
+                    stopSpinner(`${DRY_RUN} Would run: ${evt.cmd} in ${evt.dir}`);
+                }
+            }
+
+            function getLogFileUrl(dir) {
+                if (quiet || dryRun) return null;
+                const logFile = path.join(logDir, sanitizeFilename(dir) + '.txt');
+                const logFilePath = path.resolve(logFile);
+                if (process.platform === 'win32') {
+                    return 'file:///' + logFilePath.replace(/\\/g, '/');
+                } else {
+                    return 'file://' + logFilePath;
+                }
+            }
+
+            function handleResult(evt) {
+                const symbol = evt.type === 'success' ? SUCCESS : FAILURE;
+                const logFileUrl = getLogFileUrl(evt.dir);
+                if (isParallel) {
+                    process.stdout.write(`${symbol} ${evt.dir} [${inProgressCount}/${totalProjects}]`);
+                    if (logFileUrl) process.stdout.write(` (log: ${logFileUrl})`);
+                    process.stdout.write(`\n`);
+                } else {
+                    let msg = `${symbol} ${evt.dir}`;
+                    if (logFileUrl) msg += ` (log: ${logFileUrl})`;
+                    stopSpinner(msg);
+                }
+            }
+
             localEmitter.on('progress', (evt) => {
                 switch (evt.type) {
                     case 'start':
-                        inProgressCount++;
-                        if (isParallel) {
-                            process.stdout.write(`${BUILDING} ${evt.dir} with ${evt.cmd} [${inProgressCount}/${totalProjects}]\n`);
-                        } else {
-                            startSpinner(`${evt.dir} with ${evt.cmd}`);
-                        }
+                        handleStart(evt);
                         break;
                     case 'dryrun':
-                        if (isParallel) {
-                            process.stdout.write(`${DRY_RUN} Would run: ${evt.cmd} in ${evt.dir} [${inProgressCount}/${totalProjects}]\n`);
-                        } else {
-                            stopSpinner(`${DRY_RUN} Would run: ${evt.cmd} in ${evt.dir}`);
-                        }
+                        handleDryRun(evt);
                         break;
                     case 'success':
-                    case 'failure': {
-                        const symbol = evt.type === 'success' ? SUCCESS : FAILURE;
-                        let logFilePath;
-                        let logFileUrl;
-                        if (!quiet && !dryRun) {
-                            const logFile = path.join(logDir, sanitizeFilename(evt.dir) + '.txt');
-                            logFilePath = path.resolve(logFile);
-                            // Windows: replace backslashes with slashes and add extra slash after file:
-                            if (process.platform === 'win32') {
-                                logFileUrl = 'file:///' + logFilePath.replace(/\\/g, '/');
-                            } else {
-                                logFileUrl = 'file://' + logFilePath;
-                            }
-                        }
-                        if (isParallel) {
-                            process.stdout.write(`${symbol} ${evt.dir} [${inProgressCount}/${totalProjects}]`);
-                            if (logFileUrl) process.stdout.write(` (log: ${logFileUrl})`);
-                            process.stdout.write(`\n`);
-                        } else {
-                            let msg = `${symbol} ${evt.dir}`;
-                            if (logFileUrl) msg += ` (log: ${logFileUrl})`;
-                            stopSpinner(msg);
-                        }
+                    case 'failure':
+                        handleResult(evt);
                         break;
-                    }
                     default:
                         break;
                 }

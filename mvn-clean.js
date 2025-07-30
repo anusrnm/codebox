@@ -1,0 +1,195 @@
+#!/usr/bin/env node
+
+import { readdirSync, statSync, existsSync } from 'fs';
+import { resolve, join } from 'path';
+import { spawn } from 'child_process';
+import os from 'os';
+
+const ERROR = '❌';
+const INFO = 'ℹ️';
+
+function getDirSize(dirPath) {
+    let total = 0;
+    try {
+        const entries = readdirSync(dirPath, { withFileTypes: true });
+        for (const entry of entries) {
+            const fullPath = join(dirPath, entry.name);
+            try {
+                if (entry.isSymbolicLink()) continue;
+                if (entry.isFile()) {
+                    total += statSync(fullPath).size;
+                } else if (entry.isDirectory()) {
+                    total += getDirSize(fullPath);
+                }
+            } catch { continue; }
+        }
+    } catch { }
+    return total;
+}
+
+function formatSize(bytes) {
+    const units = ['B', 'KB', 'MB', 'GB', 'TB'];
+    let i = 0;
+    while (bytes >= 1024 && i < units.length - 1) {
+        bytes /= 1024;
+        i++;
+    }
+    return `${bytes.toFixed(2)} ${units[i]}`;
+}
+
+function findTargetDirs(basePath) {
+    const dirs = [];
+    for (const item of readdirSync(basePath)) {
+        const itemPath = join(basePath, item);
+        const targetFolder = join(itemPath, 'target');
+        const pom = join(itemPath, 'pom.xml');
+        if (
+            existsSync(targetFolder) &&
+            statSync(targetFolder).isDirectory() &&
+            existsSync(pom)
+        ) {
+            dirs.push(itemPath);
+        }
+    }
+    return dirs;
+}
+
+
+function resolveMvnPath() {
+    if (os.platform() === 'win32') {
+        return 'mvn.cmd';
+    }
+    return 'mvn';
+}
+
+function parseArgs() {
+    const args = process.argv.slice(2);
+    let basePath = process.cwd();
+    let dryRun = false;
+    if (args.length > 0) {
+        if (args.includes('--dry-run')) {
+            dryRun = true;
+            basePath = args.find(a => a !== '--dry-run') || basePath;
+        } else {
+            basePath = args[0];
+        }
+    }
+    return { basePath, dryRun };
+}
+
+function validateBasePath(basePath) {
+    if (!existsSync(basePath)) {
+        console.error(`${ERROR} Base path '${basePath}' does not exist.`);
+        process.exit(1);
+    }
+    if (!statSync(basePath).isDirectory()) {
+        console.error(`${ERROR} Base path '${basePath}' is not a directory.`);
+        process.exit(1);
+    }
+}
+
+function reportTargetDirs(targetDirs, targetSizes) {
+    console.log(`${INFO} Found ${targetDirs.length} Maven project(s) to clean.`);
+    let totalBytes = Object.values(targetSizes).reduce((a, b) => a + b, 0);
+    console.log(`${INFO} Total disk space that will be reclaimed: ${formatSize(totalBytes)}`);
+    console.log(`\n${INFO} Directories to be cleaned:`);
+    for (const dirPath of targetDirs) {
+        const size = targetSizes[dirPath] || 0;
+        console.log(` - ${dirPath} (${formatSize(size)})`);
+    }
+}
+
+function cleanMavenInTargetDirAsync(itemPath, mvnPath) {
+    return new Promise((resolve) => {
+        const proc = spawn(mvnPath, ['-q', 'clean'], { cwd: itemPath, shell: false });
+        proc.on('close', (code) => {
+            if (code === 0) {
+                console.log(`Maven clean executed successfully in '${itemPath}'.`);
+                resolve({ path: itemPath, error: '' });
+            } else {
+                resolve({ path: itemPath, error: `Error executing mvn clean: exit code ${code}` });
+            }
+        });
+        proc.on('error', (e) => {
+            resolve({ path: itemPath, error: `OS error: ${e.message}` });
+        });
+    });
+}
+
+async function cleanDirs(targetDirs, mvnPath, concurrency = os.cpus().length) {
+    const cleaned = [];
+    const errors = [];
+    let index = 0;
+
+    async function worker() {
+        while (index < targetDirs.length) {
+            const dirPath = targetDirs[index++];
+            const result = await cleanMavenInTargetDirAsync(dirPath, mvnPath);
+            if (!result.error) {
+                cleaned.push(result.path);
+            } else {
+                errors.push(result);
+            }
+        }
+    }
+
+    await Promise.all(Array(concurrency).fill().map(worker));
+    return { cleaned, errors };
+}
+
+function reportCleaned(cleaned, errors, targetSizes) {
+    console.log(`\n${INFO} Cleaned directories:`);
+    for (const c of cleaned) {
+        console.log(` - ${c}`);
+    }
+    console.log(` ${INFO} Total cleaned directories: ${cleaned.length}`);
+
+    if (errors.length > 0) {
+        console.log(`\n${ERROR} Errors encountered:`);
+        for (const { path, error } of errors) {
+            console.log(` - ${path}: ${error}`);
+        }
+        console.log(` ${ERROR} Total errors: ${errors.length}`);
+    }
+
+    const reclaimedBytes = cleaned.reduce((sum, path) => sum + (targetSizes[path] || 0), 0);
+    console.log(`\n${INFO} Total disk space reclaimed: ${formatSize(reclaimedBytes)}`);
+}
+
+function getTargetSizes(targetDirs) {
+    const targetSizes = {};
+    for (const dirPath of targetDirs) {
+        const targetFolder = join(dirPath, 'target');
+        if (existsSync(targetFolder)) {
+            targetSizes[dirPath] = getDirSize(targetFolder);
+        }
+    }
+    return targetSizes;
+}
+
+async function main() {
+    const { basePath, dryRun } = parseArgs();
+    validateBasePath(basePath);
+
+    const mvnPath = resolveMvnPath();
+    const targetDirs = findTargetDirs(basePath);
+
+    if (targetDirs.length === 0) {
+        const absolutePath = resolve(basePath);
+        console.log(`${ERROR} No Maven target directories found in '${absolutePath}'.`);
+        return;
+    }
+
+    const targetSizes = getTargetSizes(targetDirs);
+    reportTargetDirs(targetDirs, targetSizes);
+
+    if (dryRun) {
+        console.log(`\n${INFO} Dry run: No directories were cleaned.`);
+        return;
+    }
+
+    const { cleaned, errors } = await cleanDirs(targetDirs, mvnPath);
+    reportCleaned(cleaned, errors, targetSizes);
+}
+
+main();
