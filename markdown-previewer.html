@@ -1,0 +1,431 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Markdown to HTML & PDF Export</title>
+
+    <!-- Correct CDN links for marked, jsPDF, dompurify, and html2canvas -->
+    <script type="module">
+        import { marked } from 'https://cdn.jsdelivr.net/npm/marked/lib/marked.esm.js';
+        document.addEventListener('DOMContentLoaded', function () {
+            const { jsPDF } = window.jspdf;
+            const markdownInput = document.getElementById('markdown-input');
+            const preview = document.getElementById('preview');
+            const exportBtn = document.getElementById('export-btn');
+            const copyBtn = document.getElementById('copy-btn');
+            const wordCount = document.getElementById('word-count');
+            const charCount = document.getElementById('char-count');
+            const spinner = document.getElementById('spinner');
+            const themeSelect = document.getElementById('theme-select');
+            const printBtn = document.getElementById('print-btn');
+
+            // Responsive: Debounce rendering for performance
+            let renderTimeout;
+            function debounceRenderMarkdown() {
+                clearTimeout(renderTimeout);
+                renderTimeout = setTimeout(renderMarkdown, 200);
+            }
+
+            // Load from localStorage
+            if (localStorage.getItem('markdownInput')) {
+                markdownInput.value = localStorage.getItem('markdownInput');
+            }
+
+            // Function to render Markdown to HTML using marked.parse and sanitize
+            function renderMarkdown() {
+                const markdownText = markdownInput.value;
+                localStorage.setItem('markdownInput', markdownText);
+                const htmlContent = marked.parse(markdownText);
+                // Sanitize output
+                preview.innerHTML = DOMPurify.sanitize(htmlContent);
+                // Syntax highlight code blocks
+                preview.querySelectorAll('pre code').forEach(block => {
+                    window.hljs.highlightElement(block);
+                });
+                updateCounts(markdownText);
+            }
+
+            // Update word/char count
+            function updateCounts(text) {
+                const words = text.trim().split(/\s+/).filter(Boolean);
+                wordCount.textContent = 'Words: ' + words.length;
+                charCount.textContent = 'Characters: ' + text.length;
+            }
+
+            // Event listener for real-time Markdown rendering (debounced)
+            markdownInput.addEventListener('input', debounceRenderMarkdown);
+
+            // Initial render
+            renderMarkdown();
+
+            // Function to export the content as PDF
+            function exportToPDF() {
+                spinner.style.display = 'inline-block';
+                const doc = new jsPDF();
+                html2canvas(preview, {
+                    useCORS: true,
+                    backgroundColor: null
+                }).then(function (canvas) {
+                    const imgData = canvas.toDataURL('image/png');
+                    doc.addImage(imgData, 'PNG', 10, 10);
+                    doc.save('document.pdf');
+                    spinner.style.display = 'none';
+                }).catch(function (error) {
+                    spinner.style.display = 'none';
+                    alert('PDF export failed: ' + error.message);
+                });
+            }
+
+            // Event listener for the Export to PDF button
+            exportBtn.addEventListener('click', exportToPDF);
+
+            // Copy HTML button
+            copyBtn.addEventListener('click', function () {
+                navigator.clipboard.writeText(preview.innerHTML)
+                    .then(() => {
+                        copyBtn.textContent = 'Copied!';
+                        setTimeout(() => copyBtn.textContent = 'Copy HTML', 1200);
+                    })
+                    .catch(() => alert('Copy failed.'));
+            });
+
+            // Theme selection
+            function setTheme(theme) {
+                document.body.classList.remove('theme-light', 'theme-dark', 'theme-solarized', 'theme-high-contrast');
+                document.body.classList.add('theme-' + theme);
+                localStorage.setItem('theme', theme);
+            }
+            themeSelect.addEventListener('change', function () {
+                setTheme(themeSelect.value);
+            });
+            // Restore theme
+            const savedTheme = localStorage.getItem('theme') || 'light';
+            themeSelect.value = savedTheme;
+            setTheme(savedTheme);
+
+            // Print button
+            printBtn.addEventListener('click', function () {
+                // Copy theme class to html for print
+                const themeClass = Array.from(document.body.classList).find(c => c.startsWith('theme-'));
+                document.documentElement.classList.add(themeClass);
+                window.print();
+                setTimeout(() => {
+                    document.documentElement.classList.remove(themeClass);
+                }, 1000);
+            });
+        });
+    </script>
+
+    <!-- CDN for jsPDF UMD Version -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+
+    <!-- CDN for DOMPurify -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/2.4.0/purify.min.js"></script>
+
+    <!-- CDN for html2canvas (latest) -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+
+    <!-- Highlight.js CDN and theme -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.11.1/styles/default.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.11.1/highlight.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.11.1/languages/python.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.11.1/languages/javascript.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.11.1/languages/java.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.11.1/languages/cpp.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.11.1/languages/c.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.11.1/languages/csharp.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.11.1/languages/ruby.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.11.1/languages/go.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.11.1/languages/php.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.11.1/languages/html.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.11.1/languages/css.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.11.1/languages/xml.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.11.1/languages/bash.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.11.1/languages/typescript.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.11.1/languages/json.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.11.1/languages/markdown.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.11.1/languages/sql.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.11.1/languages/swift.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.11.1/languages/kotlin.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.11.1/languages/rust.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.11.1/languages/shell.min.js"></script>
+
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 5px;
+            background-color: #f9f9f9;
+            transition: background 0.3s, color 0.3s;
+        }
+        .main-content {
+            display: flex;
+            gap: 5px;
+            align-items: flex-start;
+        }
+        textarea {
+            width: 100%;
+            height: calc(100vh - 80px);
+            font-family: monospace;
+            margin-bottom: 0;
+            resize: none;
+            flex: 1 1 50%;
+            box-sizing: border-box;
+            min-height: 200px;
+        }
+        #preview {
+            border: 1px solid #ddd;
+            padding: 20px;
+            background-color: #fff;
+            min-height: 200px;
+            height: calc(100vh - 80px);
+            overflow-x: auto;
+            flex: 1 1 50%;
+            box-sizing: border-box;
+            font-family:'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+        #preview table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+            background: inherit;
+        }
+        #preview th, #preview td {
+            padding: 10px;
+            text-align: left;
+            border: none;
+        }
+        #preview th {
+            background-color: #f0f0f0;
+            font-weight: bold;
+        }
+        #preview tr {
+            border-bottom: 1px solid #ddd;
+        }
+        #preview pre {
+            background: #f5f5f5;
+            border-radius: 6px;
+            padding: 12px 16px;
+            margin: 10px 0;
+            font-size: 15px;
+            font-family: 'Fira Mono', 'Consolas', 'Menlo', 'Monaco', monospace;
+            overflow-x: auto;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+        }
+        .theme-dark #preview pre {
+            background: #222;
+            color: #eee;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.12);
+        }
+        .theme-solarized #preview pre {
+            background: #eee8d5;
+            color: #657b83;
+        }
+        .theme-high-contrast #preview pre {
+            background: #000;
+            color: #fff;
+            border: 1px solid #fff;
+        }
+        @media (max-width: 900px) {
+            .main-content {
+                flex-direction: column;
+                gap: 0;
+            }
+            textarea, #preview {
+                min-width: 0;
+                width: 100%;
+                min-height: 200px;
+            }
+        }
+        .toolbar {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+            margin-bottom: 10px;
+            flex-wrap: wrap;
+        }
+        button {
+            padding: 10px 20px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            cursor: pointer;
+            margin-top: 10px;
+            border-radius: 4px;
+            transition: background 0.2s;
+        }
+        button[title] {
+            position: relative;
+        }
+        button:hover {
+            background-color: #45a049;
+        }
+        #spinner {
+            display: none;
+            margin-left: 10px;
+            vertical-align: middle;
+        }
+        #word-count, #char-count {
+            margin-left: 15px;
+            font-size: 14px;
+            color: #888;
+        }
+        /* Theme: Dark */
+        .theme-dark {
+            background-color: #222 !important;
+            color: #eee !important;
+        }
+        .theme-dark #preview {
+            background-color: #333 !important;
+            color: #eee !important;
+            border-color: #444 !important;
+        }
+        .theme-dark textarea {
+            background-color: #222 !important;
+            color: #eee !important;
+            border-color: #444 !important;
+        }
+        .theme-dark #preview th {
+            background-color: #444;
+            color: #eee;
+        }
+        .theme-dark #preview tr {
+            border-bottom: 1px solid #444;
+        }
+        /* Theme: Solarized */
+        .theme-solarized {
+            background-color: #fdf6e3 !important;
+            color: #657b83 !important;
+        }
+        .theme-solarized #preview {
+            background-color: #eee8d5 !important;
+            color: #657b83 !important;
+            border-color: #b58900 !important;
+        }
+        .theme-solarized textarea {
+            background-color: #fdf6e3 !important;
+            color: #657b83 !important;
+            border-color: #b58900 !important;
+        }
+        .theme-solarized #preview th {
+            background-color: #eee8d5;
+            color: #657b83;
+        }
+        .theme-solarized #preview tr {
+            border-bottom: 1px solid #b58900;
+        }
+        /* Theme: High Contrast */
+        .theme-high-contrast {
+            background-color: #000 !important;
+            color: #fff !important;
+        }
+        .theme-high-contrast #preview {
+            background-color: #000 !important;
+            color: #fff !important;
+            border-color: #fff !important;
+        }
+        .theme-high-contrast textarea {
+            background-color: #000 !important;
+            color: #fff !important;
+            border-color: #fff !important;
+        }
+        .theme-high-contrast #preview th {
+            background-color: #222;
+            color: #fff;
+        }
+        .theme-high-contrast #preview tr {
+            border-bottom: 1px solid #fff;
+        }
+        /* Theme: Light (default) */
+        .theme-light {
+            background-color: #f9f9f9 !important;
+            color: #222 !important;
+        }
+        .theme-light #preview {
+            background-color: #fff !important;
+            color: #222 !important;
+            border-color: #ddd !important;
+        }
+        .theme-light textarea {
+            background-color: #fff !important;
+            color: #222 !important;
+            border-color: #ddd !important;
+        }
+        /* Heading colors for each theme */
+        .theme-dark #preview h1 { color: #eee; }
+        .theme-solarized #preview h1 { color: #586e75; }
+        .theme-high-contrast #preview h1 { color: #fff; }
+        .theme-dark #preview h2 { color: #ccc; }
+        .theme-solarized #preview h2 { color: #657b83; }
+        .theme-high-contrast #preview h2 { color: #fff; }
+        .theme-dark #preview p { color: #bbb; }
+        .theme-solarized #preview p { color: #657b83; }
+        .theme-high-contrast #preview p { color: #fff; }
+        .theme-dark #preview code { background-color: #222; color: #eee; }
+        .theme-solarized #preview code { background-color: #eee8d5; color: #657b83; }
+        .theme-high-contrast #preview code { background-color: #000; color: #fff; }
+        .theme-dark #preview li { color: #ccc; }
+        .theme-solarized #preview li { color: #657b83; }
+        .theme-high-contrast #preview li { color: #fff; }
+        #preview blockquote {
+            background-color: #f9f9f9;
+            border-left: 5px solid #ccc;
+            padding: 3px 12px;
+            margin: 5px 0px 5px 0px;
+            font-style: italic;
+        }
+        #preview blockquote p {
+            margin-top: 5px;
+            margin-bottom: 5px;
+        }
+        .theme-dark #preview blockquote { background-color: #222; border-left: 5px solid #888; color: #aaa; }
+        .theme-solarized #preview blockquote { background-color: #eee8d5; border-left: 5px solid #b58900; color: #657b83; }
+        .theme-high-contrast #preview blockquote { background-color: #000; border-left: 5px solid #fff; color: #fff; }
+        /* Print only preview, allow multi-page */
+        @media print {
+            /* Hide everything except preview */
+            .toolbar, .main-content textarea {
+                display: none !important;
+            }
+            #preview {
+                display: block !important;
+                width: 100% !important;
+                min-height: 100vh !important;
+                box-shadow: none !important;
+                border: none !important;
+                background: inherit !important;
+                color: inherit !important;
+                page-break-after: auto !important;
+                page-break-inside: avoid !important;
+            }
+            #preview h1, #preview h2, #preview h3, #preview p, #preview ul, #preview ol, #preview table, #preview blockquote {
+                page-break-after: auto;
+                page-break-inside: avoid;
+            }
+        }
+    </style>
+</head>
+<body>
+
+    <div class="toolbar">
+        <button id="export-btn" title="Export preview as PDF">Export to PDF</button>
+        <button id="copy-btn" title="Copy rendered HTML to clipboard">Copy HTML</button>
+        <button id="print-btn" title="Print preview area">Print</button>
+        <label for="theme-select" style="margin-left:10px;">Theme:</label>
+        <select id="theme-select" title="Choose preview theme">
+            <option value="light">Light</option>
+            <option value="dark">Dark</option>
+            <option value="solarized">Solarized</option>
+            <option value="high-contrast">High Contrast</option>
+        </select>
+        <span id="word-count">Words: 0</span>
+        <span id="char-count">Characters: 0</span>
+        <span id="spinner"><svg width="20" height="20" viewBox="0 0 50 50"><circle cx="25" cy="25" r="20" fill="none" stroke="#4CAF50" stroke-width="5" stroke-linecap="round" stroke-dasharray="31.4 31.4" transform="rotate(-90 25 25)"><animateTransform attributeName="transform" type="rotate" from="0 25 25" to="360 25 25" dur="1s" repeatCount="indefinite"/></circle></svg></span>
+    </div>
+    <div class="main-content">
+        <textarea id="markdown-input" placeholder="Write Markdown here..." aria-label="Markdown input"></textarea>
+        <div id="preview" aria-label="Markdown preview"></div>
+    </div>
+
+</body>
+</html>
