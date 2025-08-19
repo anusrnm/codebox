@@ -398,7 +398,7 @@
                 page-break-after: auto !important;
                 page-break-inside: avoid !important;
             }
-            #preview h1, #preview h2, #preview h3, #preview p, #preview ul, #preview ol, #preview table, #preview blockquote {
+            #preview * {
                 page-break-after: auto;
                 page-break-inside: avoid;
             }
@@ -410,7 +410,7 @@
     <div class="toolbar">
         <button id="export-btn" title="Export preview as PDF">Export to PDF</button>
         <button id="copy-btn" title="Copy rendered HTML to clipboard">Copy HTML</button>
-        <button id="print-btn" title="Print preview area">Print</button>
+        <button id="print-btn" title="Print preview area. For accurate theme colors, enable 'Print backgrounds' or 'Background graphics' in your browser's print dialog.">Print</button>
         <label for="theme-select" style="margin-left:10px;">Theme:</label>
         <select id="theme-select" title="Choose preview theme">
             <option value="light">Light</option>
