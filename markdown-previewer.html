@@ -20,6 +20,8 @@
             const themeSelect = document.getElementById('theme-select');
             const printBtn = document.getElementById('print-btn');
             const responseTime = document.getElementById('response-time');
+            const filenameInput = document.getElementById('filename-input');
+            const saveBtn = document.getElementById('save-btn');
 
             // Responsive: Debounce rendering for performance
             let renderTimeout;
@@ -31,6 +33,10 @@
             // Load from localStorage
             if (localStorage.getItem('markdownInput')) {
                 markdownInput.value = localStorage.getItem('markdownInput');
+            }
+            // Load filename from localStorage
+            if (localStorage.getItem('markdownFilename')) {
+                filenameInput.value = localStorage.getItem('markdownFilename');
             }
 
             // Function to render Markdown to HTML using marked.parse and sanitize
@@ -44,6 +50,38 @@
                 // Syntax highlight code blocks
                 preview.querySelectorAll('pre code').forEach(block => {
                     window.hljs.highlightElement(block);
+                });
+                // Add copy button to each pre block
+                preview.querySelectorAll('pre').forEach(pre => {
+                    if (!pre.querySelector('.pre-copy-btn')) {
+                        const btn = document.createElement('button');
+                        btn.textContent = 'Copy';
+                        btn.className = 'pre-copy-btn';
+                        btn.title = 'Copy code to clipboard';
+                        btn.style.position = 'absolute';
+                        btn.style.top = '8px';
+                        btn.style.right = '8px';
+                        btn.style.padding = '4px 10px';
+                        btn.style.fontSize = '13px';
+                        btn.style.background = '#4CAF50';
+                        btn.style.color = '#fff';
+                        btn.style.border = 'none';
+                        btn.style.borderRadius = '4px';
+                        btn.style.cursor = 'pointer';
+                        btn.style.zIndex = '2';
+                        btn.addEventListener('click', function(e) {
+                            e.stopPropagation();
+                            const code = pre.querySelector('code');
+                            if (code) {
+                                navigator.clipboard.writeText(code.textContent).then(() => {
+                                    btn.textContent = 'Copied!';
+                                    setTimeout(() => btn.textContent = 'Copy', 1200);
+                                });
+                            }
+                        });
+                        pre.style.position = 'relative';
+                        pre.appendChild(btn);
+                    }
                 });
                 updateCounts(markdownText);
                 const end = performance.now();
@@ -118,6 +156,42 @@
                     document.documentElement.classList.remove(themeClass);
                 }, 1000);
             });
+
+            // Filename input: switch to editable on click/focus
+            filenameInput.addEventListener('click', function() {
+                filenameInput.readOnly = false;
+                filenameInput.focus();
+            });
+            filenameInput.addEventListener('blur', function() {
+                filenameInput.readOnly = true;
+                localStorage.setItem('markdownFilename', filenameInput.value);
+            });
+            filenameInput.addEventListener('keydown', function(e) {
+                if (e.key === 'Enter') {
+                    filenameInput.readOnly = true;
+                    localStorage.setItem('markdownFilename', filenameInput.value);
+                    saveBtn.focus();
+                }
+            });
+
+            // Save Markdown to file
+            saveBtn.addEventListener('click', function() {
+                let filename = filenameInput.value.trim();
+                if (!filename) filename = 'document.md';
+                if (!filename.endsWith('.md')) filename += '.md';
+                const blob = new Blob([markdownInput.value], { type: 'text/markdown' });
+                const a = document.createElement('a');
+                a.href = URL.createObjectURL(blob);
+                a.download = filename;
+                document.body.appendChild(a);
+                a.click();
+                setTimeout(() => {
+                    document.body.removeChild(a);
+                    URL.revokeObjectURL(a.href);
+                }, 100);
+                saveBtn.textContent = 'Saved!';
+                setTimeout(() => saveBtn.textContent = 'Save', 1200);
+            });
         });
     </script>
 
@@ -154,6 +228,7 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.11.1/languages/kotlin.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.11.1/languages/rust.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.11.1/languages/shell.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.11.1/languages/properties.min.js"></script>
 
     <style>
         body {
@@ -301,6 +376,51 @@
         select#theme-select:focus {
             outline: 2px solid #4CAF50;
         }
+        /* Filename input: plain text look, styled on focus */
+        #filename-input {
+            border: none;
+            background: transparent;
+            color: #222;
+            font-size: 15px;
+            padding: 8px 10px;
+            min-width: 120px;
+            transition: all 0.2s;
+            cursor: pointer;
+        }
+        #filename-input:focus, #filename-input:not([readonly]) {
+            border: 1px solid #4CAF50;
+            background: #fff;
+            color: #222;
+            outline: none;
+            cursor: text;
+        }
+        .theme-dark #filename-input {
+            color: #eee;
+            background: transparent;
+        }
+        .theme-dark #filename-input:focus, .theme-dark #filename-input:not([readonly]) {
+            background: #222;
+            color: #eee;
+            border-color: #45a049;
+        }
+        .theme-solarized #filename-input {
+            color: #657b83;
+            background: transparent;
+        }
+        .theme-solarized #filename-input:focus, .theme-solarized #filename-input:not([readonly]) {
+            background: #eee8d5;
+            color: #657b83;
+            border-color: #b58900;
+        }
+        .theme-high-contrast #filename-input {
+            color: #fff;
+            background: transparent;
+        }
+        .theme-high-contrast #filename-input:focus, .theme-high-contrast #filename-input:not([readonly]) {
+            background: #000;
+            color: #fff;
+            border-color: #fff;
+        }
         /* Theme: Dark */
         .theme-dark {
             background-color: #222 !important;
@@ -431,11 +551,49 @@
                 color: inherit !important;
                 page-break-after: auto !important;
                 page-break-inside: avoid !important;
+                height: auto !important;
+                max-height: none !important;
+            }
+            #preview pre, #preview code {
+                white-space: pre-wrap !important;
+                word-break: break-word !important;
+                overflow: visible !important;
+                max-width: 100% !important;
+            }
+            #preview h1, #preview h2, #preview h3, #preview h4, #preview h5, #preview h6 {
+                page-break-after: avoid !important;
+                page-break-inside: avoid !important;
+            }
+            #preview p, #preview ul, #preview ol, #preview table, #preview blockquote, #preview pre {
+                page-break-before: avoid !important;
+                page-break-inside: avoid !important;
             }
             #preview * {
                 page-break-after: auto;
                 page-break-inside: avoid;
             }
+            .pre-copy-btn {
+                display: none !important;
+            }
+        }
+        /* Style for pre block copy button */
+        .pre-copy-btn {
+            position: absolute;
+            top: 8px;
+            right: 8px;
+            padding: 4px 10px;
+            font-size: 13px;
+            background: #4CAF50;
+            color: #fff;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            z-index: 2;
+            opacity: 0.8;
+            transition: opacity 0.2s;
+        }
+        .pre-copy-btn:hover {
+            opacity: 1;
         }
     </style>
 </head>
@@ -445,6 +603,8 @@
         <button id="export-btn" title="Export preview as PDF">Export to PDF</button>
         <button id="copy-btn" title="Copy rendered HTML to clipboard">Copy HTML</button>
         <button id="print-btn" title="Print preview area. For accurate theme colors, enable 'Print backgrounds' or 'Background graphics' in your browser's print dialog.">Print</button>
+        <input id="filename-input" type="text" value="document.md" title="Filename for saving" readonly />
+        <button id="save-btn" title="Save Markdown to file">Save</button>
         <label for="theme-select">Theme:</label>
         <select id="theme-select" title="Choose preview theme">
             <option value="light">Light</option>
