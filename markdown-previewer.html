@@ -9,14 +9,11 @@
     <script type="module">
         import { marked } from 'https://cdn.jsdelivr.net/npm/marked/lib/marked.esm.js';
         document.addEventListener('DOMContentLoaded', function () {
-            const { jsPDF } = window.jspdf;
             const markdownInput = document.getElementById('markdown-input');
             const preview = document.getElementById('preview');
-            const exportBtn = document.getElementById('export-btn');
             const copyBtn = document.getElementById('copy-btn');
             const wordCount = document.getElementById('word-count');
             const charCount = document.getElementById('char-count');
-            const spinner = document.getElementById('spinner');
             const themeSelect = document.getElementById('theme-select');
             const printBtn = document.getElementById('print-btn');
             const responseTime = document.getElementById('response-time');
@@ -100,27 +97,6 @@
 
             // Initial render
             renderMarkdown();
-
-            // Function to export the content as PDF
-            function exportToPDF() {
-                spinner.style.display = 'inline-block';
-                const doc = new jsPDF();
-                html2canvas(preview, {
-                    useCORS: true,
-                    backgroundColor: null
-                }).then(function (canvas) {
-                    const imgData = canvas.toDataURL('image/png');
-                    doc.addImage(imgData, 'PNG', 10, 10);
-                    doc.save('document.pdf');
-                    spinner.style.display = 'none';
-                }).catch(function (error) {
-                    spinner.style.display = 'none';
-                    alert('PDF export failed: ' + error.message);
-                });
-            }
-
-            // Event listener for the Export to PDF button
-            exportBtn.addEventListener('click', exportToPDF);
 
             // Copy HTML button
             copyBtn.addEventListener('click', function () {
@@ -338,11 +314,6 @@
         button:hover {
             background-color: #45a049;
         }
-        #spinner {
-            display: none;
-            margin-left: 10px;
-            vertical-align: middle;
-        }
         #word-count, #char-count, #response-time {
             margin-left: 15px;
             font-size: 14px;
@@ -523,7 +494,7 @@
             border-radius: 4px;
         }
         #preview blockquote {
-            background-color: #f9f9f9;
+            background-color: #f0f0f0;
             border-left: 5px solid #ccc;
             padding: 3px 12px;
             margin: 5px 0px 5px 0px;
@@ -547,12 +518,16 @@
                 min-height: 100vh !important;
                 box-shadow: none !important;
                 border: none !important;
-                background: inherit !important;
+                background: none !important;
                 color: inherit !important;
                 page-break-after: auto !important;
                 page-break-inside: avoid !important;
                 height: auto !important;
                 max-height: none !important;
+            }
+            /* Children backgrounds preserved, but not #preview itself */
+            #preview td {
+                background-color: transparent !important;
             }
             #preview pre, #preview code {
                 white-space: pre-wrap !important;
@@ -574,6 +549,43 @@
             }
             .pre-copy-btn {
                 display: none !important;
+            }
+            /* Theme-specific backgrounds for children only */
+            #preview blockquote {
+                background-color: #f0f0f0 !important;
+                border-left: 5px solid #ccc !important;
+                color: #222 !important;
+            }
+            .theme-dark #preview blockquote {
+                background-color: #222 !important;
+                border-left: 5px solid #888 !important;
+                color: #aaa !important;
+            }
+            .theme-solarized #preview blockquote {
+                background-color: #eee8d5 !important;
+                border-left: 5px solid #b58900 !important;
+                color: #657b83 !important;
+            }
+            .theme-high-contrast #preview blockquote {
+                background-color: #000 !important;
+                border-left: 5px solid #fff !important;
+                color: #fff !important;
+            }
+            #preview th {
+                background-color: #f0f0f0 !important;
+                color: #222 !important;
+            }
+            .theme-dark #preview th {
+                background-color: #444 !important;
+                color: #eee !important;
+            }
+            .theme-solarized #preview th {
+                background-color: #eee8d5 !important;
+                color: #657b83 !important;
+            }
+            .theme-high-contrast #preview th {
+                background-color: #222 !important;
+                color: #fff !important;
             }
         }
         /* Style for pre block copy button */
@@ -600,7 +612,6 @@
 <body>
 
     <div class="toolbar">
-        <button id="export-btn" title="Export preview as PDF">Export to PDF</button>
         <button id="copy-btn" title="Copy rendered HTML to clipboard">Copy HTML</button>
         <button id="print-btn" title="Print preview area. For accurate theme colors, enable 'Print backgrounds' or 'Background graphics' in your browser's print dialog.">Print</button>
         <input id="filename-input" type="text" value="document.md" title="Filename for saving" readonly />
@@ -615,7 +626,6 @@
         <span id="word-count">Words: 0</span>
         <span id="char-count">Characters: 0</span>
         <span id="response-time"></span>
-        <span id="spinner"><svg width="20" height="20" viewBox="0 0 50 50"><circle cx="25" cy="25" r="20" fill="none" stroke="#4CAF50" stroke-width="5" stroke-linecap="round" stroke-dasharray="31.4 31.4" transform="rotate(-90 25 25)"><animateTransform attributeName="transform" type="rotate" from="0 25 25" to="360 25 25" dur="1s" repeatCount="indefinite"/></circle></svg></span>
     </div>
     <div class="main-content">
         <textarea id="markdown-input" placeholder="Write Markdown here..." aria-label="Markdown input"></textarea>
