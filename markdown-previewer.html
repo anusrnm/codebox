@@ -213,6 +213,47 @@
             background-color: #f9f9f9;
             transition: background 0.3s, color 0.3s;
         }
+        /* Style checkboxes in the Markdown preview */
+        #preview input[type="checkbox"] {
+            appearance: none;
+            -webkit-appearance: none;
+            width: 16px;
+            height: 16px;
+            border: 2px solid #4CAF50;
+            border-radius: 4px;
+            background: #fff;
+            cursor: pointer;
+            position: relative;
+            vertical-align: middle;
+            transition: border-color 0.2s, background 0.2s;
+        }
+        #preview input[type="checkbox"]:checked {
+            background: #4CAF50;
+            border-color: #4CAF50;
+        }
+        #preview input[type="checkbox"][disabled] {
+            opacity: 0.6;
+            cursor: not-allowed;
+            background: #fff;
+            border-color: #4CAF50;
+        }
+        #preview input[type="checkbox"][disabled]:checked {
+            background: #4CAF50;
+            border-color: #4CAF50;
+        }
+        #preview input[type="checkbox"]:checked::after {
+            content: '';
+            position: absolute;
+            left: 4px;
+            top: 0px;
+            width: 4px;
+            height: 8px;
+            border: solid #fff;
+            border-width: 0 3px 3px 0;
+            transform: rotate(45deg);
+            pointer-events: none;
+        }
+
         .main-content {
             display: flex;
             gap: 5px;
@@ -508,6 +549,30 @@
         .theme-high-contrast #preview blockquote { background-color: #000; border-left: 5px solid #fff; color: #fff; }
         /* Print only preview, allow multi-page */
         @media print {
+            /* Ensure checkboxes use the same color in print */
+            #preview input[type="checkbox"] {
+                width: 16px !important;
+                height: 16px !important;
+                background: #fff !important;
+                border: 2px solid #4CAF50 !important;
+            }
+            #preview input[type="checkbox"]:checked {
+                background: #4CAF50 !important;
+                border-color: #4CAF50 !important;
+                -webkit-print-color-adjust: exact !important;
+                print-color-adjust: exact !important;
+            }
+            #preview input[type="checkbox"][disabled] {
+                background: #fff !important;
+                border-color: #4CAF50 !important;
+                opacity: 0.6 !important;
+            }
+            #preview input[type="checkbox"][disabled]:checked {
+                background: #4CAF50 !important;
+                border-color: #4CAF50 !important;
+                -webkit-print-color-adjust: exact !important;
+                print-color-adjust: exact !important;
+            }
             /* Hide everything except preview */
             .toolbar, .main-content textarea {
                 display: none !important;
