@@ -6,30 +6,11 @@ import path from "path";
 import fs from "fs/promises";
 
 let mavenCmd = null;
-async function detectMavenCmd(mvnOnly = false) {
-    if (mavenCmd && !mvnOnly) return mavenCmd;
-    if (mvnOnly) {
-        mavenCmd = 'mvn';
-        return mavenCmd;
-    }
-    const isWin = process.platform === 'win32';
-    try {
-        const { spawnSync } = await import('child_process');
-        let foundMvnd = false;
-        if (isWin) {
-            // Use 'where' on Windows
-        // Use shell: true and pass the full command as a string to avoid DeprecationWarning
-        const res = spawnSync('where mvnd', { encoding: 'utf8', shell: true });
-            foundMvnd = res.status === 0 && res.stdout.trim();
-        } else {
-            // Use 'which' on Unix
-            const res = spawnSync('which', ['mvnd'], { encoding: 'utf8' });
-            foundMvnd = res.status === 0 && res.stdout.trim();
-        }
-        mavenCmd = foundMvnd ? 'mvnd' : 'mvn';
-    } catch {
-        mavenCmd = 'mvn';
-    }
+// Return 'mvn' by default; return 'mvnd' only when explicitly requested
+async function detectMavenCmd(mvndOnly = false) {
+    if (mvndOnly) return 'mvnd';
+    if (mavenCmd) return mavenCmd;
+    mavenCmd = 'mvn';
     return mavenCmd;
 }
 
@@ -39,12 +20,15 @@ async function runMavenCommand(dir, logFileStream, dryRun = false, lineIndex = n
     // Always use a local emitter if not provided
     if (!emitter) emitter = new EventEmitter();
     emitter.setMaxListeners(20); // Increase if needed for high concurrency
-    const cmd = await detectMavenCmd(runMavenCommand.mavenOnly);
+    const cmd = await detectMavenCmd(runMavenCommand.mvndOnly);
+    const overrideArgs = runMavenCommand.mavenArgs && String(runMavenCommand.mavenArgs).trim();
     let args = ["-B", "clean", "install"];
-    if (dir.includes("container")) {
-        args = ["-B", "-Pdev-dist", "clean", "package"];
+    if (!overrideArgs) {
+        if (dir.includes("container")) {
+            args = ["-B", "-Pdev-dist", "clean", "package"];
+        }
     }
-    const fullCmd = `${cmd} ${args.join(' ')}`;
+    const fullCmd = overrideArgs ? `${cmd} ${overrideArgs}` : `${cmd} ${args.join(' ')}`;
     // Emit progress event before starting
     emitter.emit('progress', { type: 'start', dir, cmd: fullCmd });
     if (dryRun) {
@@ -198,7 +182,8 @@ async function buildInOrder(projects, quiet = false) {
     async function buildProject(dir, lineIndex = null, lineCount = null, lineStatusArr = null) {
         const logFile = path.join(logDir, sanitizeFilename(dir) + '.txt');
         const logStream = (!quiet && !dryRun) ? (await import('fs')).createWriteStream(logFile) : null;
-        runMavenCommand.mavenOnly = buildInOrder.mavenOnly || false;
+        runMavenCommand.mvndOnly = buildInOrder.mvndOnly || false;
+        runMavenCommand.mavenArgs = buildInOrder.mavenArgs || null;
         // Always use a local emitter for this build
         const { EventEmitter } = await import('events');
         const localEmitter = new EventEmitter();
@@ -380,9 +365,10 @@ if (import.meta.main) {
     let directories;
     let quiet = false;
     let dryRun = false;
-    let mvnOnly = false;
+    let mvndOnly = false;
     let allParallel = false;
     let concurrency = 4;
+    let mvnArgs = null; // override for Maven arguments
 
     function printUsage() {
         console.log(`\nUsage:`);
@@ -396,7 +382,7 @@ if (import.meta.main) {
         console.log(`  --concurrency=N: Limit the number of concurrent builds (default: 4).`);
     }
 
-    // Remove --quiet, --dry-run, --mvn-only, --all-parallel, --concurrency if present
+    // Remove --quiet, --dry-run, --mvnd-only, --all-parallel, --concurrency if present
     const filteredArgs = args.filter(arg => {
         if (arg === '--quiet') {
             quiet = true;
@@ -406,8 +392,8 @@ if (import.meta.main) {
             dryRun = true;
             return false;
         }
-        if (arg === '--mvn-only') {
-            mvnOnly = true;
+        if (arg === '--mvnd-only') {
+            mvndOnly = true;
             return false;
         }
         if (arg === '--all-parallel') {
@@ -417,6 +403,11 @@ if (import.meta.main) {
         if (arg.startsWith('--concurrency=')) {
             const val = parseInt(arg.split('=')[1], 10);
             if (!isNaN(val) && val > 0) concurrency = val;
+            return false;
+        }
+        if (arg.startsWith('--mvn-args=')) {
+            // Everything after '=' is taken as a single string of args
+            mvnArgs = arg.substring('--mvn-args='.length);
             return false;
         }
         return true;
@@ -464,11 +455,12 @@ if (import.meta.main) {
         process.exit(1);
     }
 
-    // Pass dryRun, mvnOnly, allParallel, and concurrency to buildInOrder
+    // Pass dryRun, mvndOnly, allParallel, and concurrency to buildInOrder
     buildInOrder.dryRun = dryRun;
-    buildInOrder.mavenOnly = mvnOnly;
+    buildInOrder.mvndOnly = mvndOnly;
     buildInOrder.allParallel = allParallel;
     buildInOrder.concurrency = concurrency;
+    buildInOrder.mavenArgs = mvnArgs;
 
     try {
         await buildInOrder(directories, quiet);
