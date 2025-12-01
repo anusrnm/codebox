@@ -1,0 +1,262 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<title>Base64 / Hex Editor</title>
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<style>
+  :root { --bg:#121417; --fg:#e6e8ea; --accent:#4dabf7; --border:#2a2f36; --warn:#ffa94d; --err:#ff6b6b; --ok:#51cf66; --mono: "SFMono-Regular",Consolas,"Courier New",monospace; }
+  body { margin:0; font-family: system-ui,Segoe UI,Roboto,Helvetica,Arial,sans-serif; background:var(--bg); color:var(--fg); }
+  header { padding:0.75rem 1rem; background:#1b1f24; border-bottom:1px solid var(--border); display:flex; gap:1rem; align-items:center; flex-wrap:wrap; }
+  h1 { font-size:1.05rem; margin:0; font-weight:600; }
+  main { display:flex; flex-direction:column; gap:1rem; padding:1rem; }
+  section { background:#1b1f24; border:1px solid var(--border); border-radius:8px; padding:0.75rem 1rem; }
+  section h2 { margin:0 0 .5rem; font-size:.9rem; text-transform:uppercase; letter-spacing:.06em; font-weight:600; opacity:.85; }
+  textarea, input[type=text], input[type=number] { width:100%; background:#14181c; border:1px solid var(--border); border-radius:4px; padding:0.5rem; color:var(--fg); font-family:var(--mono); font-size:.85rem; resize:vertical; }
+  textarea:focus, input:focus { outline:2px solid var(--accent); }
+  button { background:#243140; color:var(--fg); border:1px solid #2f4152; padding:0.45rem 0.9rem; font-size:.8rem; border-radius:4px; cursor:pointer; display:inline-flex; align-items:center; gap:.35rem; }
+  button:hover { background:#2d3d4f; }
+  button:active { background:#324454; }
+  button.primary { background:var(--accent); border-color:var(--accent); color:#fff; font-weight:600; }
+  button.primary:hover { filter:brightness(1.05); }
+  button.danger { background:#c92a2a; border-color:#c92a2a; }
+  .row { display:flex; font-family:var(--mono); font-size:12px; align-items:center; }
+  .grid { font-family:var(--mono); background:#14181c; border:1px solid var(--border); border-radius:6px; padding:0.25rem 0.5rem; overflow:auto; max-height:55vh; line-height:1.1; }
+  .offset { width:70px; color:#8ab4f8; flex:0 0 auto; }
+  .hex-cell { width:30px; margin:1px 2px; text-align:center; background:#1e242a; border:1px solid #2a323a; color:var(--fg); border-radius:3px; font-size:11px; padding:2px; }
+  .hex-cell:focus { outline:1px solid var(--accent); background:#25303a; }
+  .ascii { margin-left:12px; white-space:pre; color:#b0bec5; }
+  .ascii span { display:inline-block; width:10px; text-align:center; cursor:pointer; }
+  .ascii span.editing { background:#2c3e50; color:#fff; }
+  .toolbar { display:flex; flex-wrap:wrap; gap:0.5rem; margin:.5rem 0 .25rem; }
+  .inline { display:inline-flex; gap:.4rem; align-items:center; }
+  .status { font-size:.75rem; margin-top:.4rem; min-height:1em; }
+  .status.ok { color:var(--ok); }
+  .status.err { color:var(--err); }
+  .pill { background:#243140; padding:0.15rem .55rem; border-radius:999px; font-size:.65rem; letter-spacing:.05em; }
+  .pagination { display:flex; gap:.5rem; align-items:center; flex-wrap:wrap; }
+  .grow { flex:1; }
+  .hidden { display:none !important; }
+  @media (max-width:900px){ .hex-cell { width:26px; margin:1px; } .offset{width:60px;} }
+</style>
+</head>
+<body>
+<header>
+  <h1>Base64 ⇄ Hex Editor</h1>
+</header>
+<main>
+  <section>
+    <h2>Input Base64 / Load File</h2>
+    <textarea id="b64In" rows="4" placeholder="Paste base64 here or load a file below..."></textarea>
+    <div class="toolbar">
+      <div class="inline">
+        <input type="file" id="fileInput" />
+        <button id="loadBinaryBtn" title="Load a binary file directly into the editor">Load Binary</button>
+        <button id="loadB64Btn" title="Treat the selected file as base64 text">Load as Base64 Text</button>
+      </div>
+      <button class="primary" id="decodeBtn">Decode Base64 → Hex</button>
+      <button id="clearBtn">Clear</button>
+    </div>
+    <div class="status" id="inputStatus"></div>
+  </section>
+
+  <section>
+    <h2>Hex Editor</h2>
+    <div class="toolbar">
+      <div class="inline">
+        <label>Page Size (bytes): <input type="number" id="pageSize" min="16" step="16" value="256" style="width:90px"/></label>
+      </div>
+      <div class="inline">
+        <label>Char View:
+          <select id="encodingSelect">
+            <option value="ascii">ASCII</option>
+            <option value="cp500">EBCDIC CP500</option>
+            <option value="ibm037">EBCDIC IBM037</option>
+          </select>
+        </label>
+      </div>
+      <div class="inline">
+        <label>2nd View:
+          <select id="secondaryEncodingSelect">
+            <option value="none">(none)</option>
+            <option value="ascii">ASCII</option>
+            <option value="cp500">EBCDIC CP500</option>
+            <option value="ibm037">EBCDIC IBM037</option>
+          </select>
+        </label>
+      </div>
+      <div class="pagination">
+        <button id="firstPageBtn">⏮</button>
+        <button id="prevPageBtn">◀</button>
+        <button id="nextPageBtn">▶</button>
+        <button id="lastPageBtn">⏭</button>
+        <label>Jump to page <input type="number" id="jumpPage" min="1" style="width:70px"/></label>
+        <button id="jumpBtn">Go</button>
+      </div>
+      <div class="inline">
+        <label>Find (hex / ascii): <input type="text" id="searchBox" placeholder="e.g. 4D5A or MZ" style="width:140px"/></label>
+        <button id="searchBtn">Search</button>
+      </div>
+      <div class="inline">
+        <button id="copySelectionBtn" title="Copy selected bytes as hex">Copy Sel Hex</button>
+        <button id="copyPageHexBtn" title="Copy this page as hex">Copy Page Hex</button>
+      </div>
+      <div class="grow"></div>
+      <div class="inline" style="gap:.3rem;">
+        <div class="pill" id="byteCount">0 bytes</div>
+        <div class="pill" id="pageInfo">Page 0 / 0</div>
+      </div>
+      <button id="refreshBase64Btn" class="primary">Update Base64 Output</button>
+    </div>
+    <div id="grid" class="grid" aria-label="Hex Editor Grid"></div>
+    <div class="status" id="hexStatus"></div>
+  </section>
+
+  <section>
+    <h2>Output Base64 / Export</h2>
+    <textarea id="b64Out" rows="4" placeholder="Modified base64 will appear here after clicking 'Update Base64 Output'"></textarea>
+    <div class="toolbar">
+      <button id="copyB64Btn">Copy Base64</button>
+      <button id="downloadB64Btn">Download .b64</button>
+      <button id="downloadBinBtn">Download Binary</button>
+      <div class="inline">
+        <label>Text Export Encoding:
+          <select id="exportEncodingSelect">
+            <option value="ascii">ASCII</option>
+            <option value="cp500">EBCDIC CP500</option>
+            <option value="ibm037">EBCDIC IBM037</option>
+          </select>
+        </label>
+        <button id="downloadTxtBtn">Download Text</button>
+      </div>
+    </div>
+    <div class="status" id="outputStatus"></div>
+  </section>
+</main>
+
+<script>
+(()=>{
+  let bytes = new Uint8Array();
+  let currentPage = 0;
+  const els = id => document.getElementById(id);
+  const b64In = els('b64In');
+  const b64Out = els('b64Out');
+  const grid = els('grid');
+  const byteCount = els('byteCount');
+  const pageInfo = els('pageInfo');
+  const inputStatus = els('inputStatus');
+  const hexStatus = els('hexStatus');
+  const outputStatus = els('outputStatus');
+  const pageSizeInput = els('pageSize');
+  const encodingSelect = els('encodingSelect');
+  const secondaryEncodingSelect = els('secondaryEncodingSelect');
+  const exportEncodingSelect = els('exportEncodingSelect');
+
+  // CP500 mapping subset
+  const cp500Forward = new Array(256).fill('.');
+  cp500Forward[0x40] = ' ';
+  for(let i=0;i<10;i++) cp500Forward[0xF0+i] = String(i);
+  for(const [i,c] of 'ABCDEFGHI'.split('').entries()) cp500Forward[0xC1+i]=c;
+  for(const [i,c] of 'JKLMNOPQR'.split('').entries()) cp500Forward[0xD1+i]=c;
+  for(const [i,c] of 'STUVWXYZ'.split('').entries()) cp500Forward[0xE2+i]=c;
+  for(const [i,c] of 'abcdefghi'.split('').entries()) cp500Forward[0x81+i]=c;
+  for(const [i,c] of 'jklmnopqr'.split('').entries()) cp500Forward[0x91+i]=c;
+  for(const [i,c] of 'stuvwxyz'.split('').entries()) cp500Forward[0xA2+i]=c;
+  const punct = {0x4B:'.',0x6B:',',0x5A:'!',0x5B:'$',0x6C:'%',0x5C:'*',0x4C:'<',0x4D:'(',0x4E:'+',0x6E:'>',0x60:'-',0x7C:';',0x4F:'|',0x7E:'=',0x6D:'?',0x7A:':',0x5E:'/',0x50:'&',0x5D:')',0x7F:'"',0x6F:'~',0x7B:'$',0xBA:'#',0x79:'^',0x51:'@',0x45:"'",0x46:'"'};
+  for(const [k,v] of Object.entries(punct)) cp500Forward[+k]=v;
+  const cp500Reverse={}; for(const [i,ch] of cp500Forward.entries()){ if(ch!=='.' && cp500Reverse[ch]===undefined) cp500Reverse[ch]=i; }
+  const ibm037Forward = cp500Forward.slice();
+  const ibm037Reverse={}; for(const [i,ch] of ibm037Forward.entries()){ if(ch!=='.' && ibm037Reverse[ch]===undefined) ibm037Reverse[ch]=i; }
+
+  const resolveForward = enc => {
+    if (enc === 'cp500') return cp500Forward;
+    if (enc === 'ibm037') return ibm037Forward;
+    return null;
+  };
+  const resolveReverse = enc => {
+    if (enc === 'cp500') return cp500Reverse;
+    if (enc === 'ibm037') return ibm037Reverse;
+    return null;
+  };
+  function byteToChar(byte, enc){ enc=enc||encodingSelect.value; const f=resolveForward(enc); if(f) return f[byte]||'.'; return (byte>=32&&byte<127)?String.fromCharCode(byte):'.'; }
+  function charToByte(ch, enc){ enc=enc||encodingSelect.value; const r=resolveReverse(enc); if(r) return r[ch]!==undefined? r[ch]: null; const code=ch.charCodeAt(0)&0xFF; if(code<32||code>=127) return null; return code; }
+
+  const setStatus=(el,msg,type='')=>{ el.textContent=msg; el.className='status '+(type||''); };
+  const fmt=n=> n.toLocaleString();
+
+  function decodeBase64ToBytes(str){ str=(str||'').trim().replaceAll(/\s+/g,''); if(!str) return new Uint8Array(); try{ const bin=atob(str); const out=new Uint8Array(bin.length); for(let i=0;i<bin.length;i++) out[i]=bin.charCodeAt(i)&0xFF; return out; }catch(e){ throw new Error('Invalid base64: '+e.message);} }
+  function bytesToBase64(arr){ if(!arr.length) return ''; const chunk=0x8000; let bin=''; for(let i=0;i<arr.length;i+=chunk){ const sub=arr.subarray(i,i+chunk); bin+=String.fromCharCode.apply(null, sub);} return btoa(bin); }
+
+  function render(){
+    const pageSize=Math.max(16,(+pageSizeInput.value||256));
+    const totalPages=Math.max(1,Math.ceil(bytes.length/pageSize)||1);
+    if(currentPage>=totalPages) currentPage=totalPages-1;
+    const start=currentPage*pageSize; const end=Math.min(start+pageSize, bytes.length);
+    pageInfo.textContent=`Page ${totalPages?currentPage+1:0} / ${totalPages}`;
+    byteCount.textContent=`${fmt(bytes.length)} byte${bytes.length===1?'':'s'}`;
+    grid.innerHTML=''; if(!bytes.length){ grid.textContent='(no data)'; return; }
+    const rowBytes=16; const secEnc= secondaryEncodingSelect && secondaryEncodingSelect.value!=='none' ? secondaryEncodingSelect.value : null;
+    for(let base=start;base<end;base+=rowBytes){
+      const row=document.createElement('div'); row.className='row';
+      const off=document.createElement('div'); off.className='offset'; off.textContent=base.toString(16).padStart(8,'0'); row.appendChild(off);
+      const primaryDiv=document.createElement('div'); primaryDiv.className='ascii primary-ascii';
+      let secondaryDiv=null; if(secEnc){ secondaryDiv=document.createElement('div'); secondaryDiv.className='ascii secondary-ascii'; }
+      for(let j=0;j<rowBytes;j++){
+        const idx=base+j; const cell=document.createElement('input'); cell.className='hex-cell'; cell.maxLength=2; cell.spellcheck=false; cell.autocomplete='off';
+        if(idx<bytes.length){
+          cell.value=bytes[idx].toString(16).padStart(2,'0').toUpperCase(); cell.dataset.idx=idx;
+          cell.addEventListener('input', e=> onHexChange(e,cell)); cell.addEventListener('keydown', e=> onHexKey(e,cell));
+        } else { cell.disabled=true; cell.value=''; }
+        row.appendChild(cell);
+        const span=document.createElement('span');
+        if(idx<bytes.length){ span.textContent=byteToChar(bytes[idx], encodingSelect.value); span.dataset.idx=idx; span.addEventListener('click', ()=> startAsciiEdit(span)); }
+        else span.textContent=' ';
+        primaryDiv.appendChild(span);
+        if(secondaryDiv){ const s2=document.createElement('span'); s2.textContent=idx<bytes.length? byteToChar(bytes[idx], secEnc):' '; secondaryDiv.appendChild(s2); }
+      }
+      row.appendChild(primaryDiv); if(secondaryDiv) row.appendChild(secondaryDiv); grid.appendChild(row);
+    }
+  }
+  function printableChar(b){ return byteToChar(b); }
+  function onHexChange(e,cell){ let v=cell.value.toUpperCase().replace(/[^0-9A-F]/g,''); cell.value=v; if(v.length===2){ const idx=+cell.dataset.idx; const byte=parseInt(v,16); if(!Number.isNaN(byte)){ bytes[idx]=byte; updateAsciiFor(idx,byte); autoAdvance(cell); debounceMarkDirty(); } } }
+  function onHexKey(e,cell){ if(e.key==='ArrowRight'){ focusNext(cell); e.preventDefault(); } else if(e.key==='ArrowLeft'){ focusPrev(cell); e.preventDefault(); } else if(e.key==='ArrowUp'||e.key==='ArrowDown'){ const idx=+cell.dataset.idx; const stride=16; const target=e.key==='ArrowUp'? idx-stride: idx+stride; if(target>=0&&target<bytes.length){ const t=grid.querySelector(`input.hex-cell[data-idx='${target}']`); if(t){ t.focus(); t.select(); } } e.preventDefault(); } else if(e.key==='.' && cell.value.length===1){ cell.value='0'+cell.value; cell.dispatchEvent(new Event('input')); } }
+  const focusNext=cell=>{ const idx=+cell.dataset.idx; const next=grid.querySelector(`input.hex-cell[data-idx='${idx+1}']`); if(next){ next.focus(); next.select(); } };
+  const focusPrev=cell=>{ const idx=+cell.dataset.idx; const prev=grid.querySelector(`input.hex-cell[data-idx='${idx-1}']`); if(prev){ prev.focus(); prev.select(); } };
+  const autoAdvance=cell=>{ const idx=+cell.dataset.idx; const next=grid.querySelector(`input.hex-cell[data-idx='${idx+1}']`); if(next){ next.focus(); next.select(); } };
+  function updateAsciiFor(idx,byte){ const prim=grid.querySelector(`.primary-ascii span[data-idx='${idx}']`); if(prim) prim.textContent=byteToChar(byte, encodingSelect.value); const secEnc = secondaryEncodingSelect && secondaryEncodingSelect.value!=='none'?secondaryEncodingSelect.value:null; if(secEnc){ const rows=grid.querySelectorAll('.row'); rows.forEach(r=>{ const p=r.querySelector('.primary-ascii'); const s=r.querySelector('.secondary-ascii'); if(!s) return; const primSpans=p.querySelectorAll('span'); const secSpans=s.querySelectorAll('span'); primSpans.forEach((ps,i)=>{ if(+ps.dataset.idx===idx && secSpans[i]) secSpans[i].textContent=byteToChar(byte,secEnc); }); }); } }
+  let asciiEditing=null; function startAsciiEdit(span){ if(asciiEditing) finishAsciiEdit(); asciiEditing=span; span.classList.add('editing'); const idx=+span.dataset.idx; const val=bytes[idx]; const inp=document.createElement('input'); inp.type='text'; inp.value=printableChar(val)==='.'?'':printableChar(val); inp.maxLength=1; Object.assign(inp.style,{width:'10px',background:'transparent',border:'none',color:'inherit',font:'inherit',padding:'0',margin:'0'}); span.textContent=''; span.appendChild(inp); inp.focus(); inp.addEventListener('blur', finishAsciiEdit); inp.addEventListener('keydown', e=>{ if(e.key==='Enter'){ inp.blur(); } else if(e.key==='Escape'){ span.dataset.cancel='1'; inp.blur(); } }); }
+  function finishAsciiEdit(){ if(!asciiEditing) return; const span=asciiEditing; asciiEditing=null; const canceled=span.dataset.cancel==='1'; delete span.dataset.cancel; const inp=span.querySelector('input'); if(inp && !canceled){ const ch=inp.value||' '; const idx=+span.dataset.idx; const conv=charToByte(ch, encodingSelect.value); if(conv!==null){ bytes[idx]=conv; const hexCell=grid.querySelector(`input.hex-cell[data-idx='${idx}']`); if(hexCell) hexCell.value=bytes[idx].toString(16).padStart(2,'0').toUpperCase(); debounceMarkDirty(); span.textContent=byteToChar(bytes[idx], encodingSelect.value); updateAsciiFor(idx, bytes[idx]); } else { span.textContent=byteToChar(bytes[idx], encodingSelect.value); } } else if(inp){ const idx=+span.dataset.idx; span.textContent=byteToChar(bytes[idx], encodingSelect.value); } span.classList.remove('editing'); }
+  grid.addEventListener('scroll', ()=> finishAsciiEdit());
+  let dirty=false; function debounceMarkDirty(){ dirty=true; hexStatus.textContent='Modified (remember to update Base64 output)'; hexStatus.className='status warn'; }
+  const changePage=delta=>{ finishAsciiEdit(); currentPage=Math.max(0,currentPage+delta); render(); };
+  const gotoPage=p=>{ finishAsciiEdit(); const pageSize=Math.max(16,(+pageSizeInput.value||256)); const totalPages=Math.max(1,Math.ceil(bytes.length/pageSize)); currentPage=Math.min(Math.max(0,p), totalPages-1); render(); };
+  function search(){ const q=els('searchBox').value.trim(); if(!q){ setStatus(hexStatus,'Enter search term',''); return; } const hexLike=/^[0-9a-fA-F ]{2,}$/; let idx=-1; if(hexLike.test(q) && q.replace(/\s+/g,'').length%2===0){ const pattern=q.replace(/\s+/g,'').toLowerCase(); const patBytes=[]; for(let i=0;i<pattern.length;i+=2) patBytes.push(parseInt(pattern.slice(i,i+2),16)); outer: for(let i=0;i<=bytes.length-patBytes.length;i++){ for(let j=0;j<patBytes.length;j++) if(bytes[i+j]!==patBytes[j]) continue outer; idx=i; break; } } else { let patBytes; if(encodingSelect.value==='cp500'||encodingSelect.value==='ibm037'){ patBytes=[]; for(const ch of q){ const b=charToByte(ch, encodingSelect.value); if(b===null){ patBytes=null; break; } patBytes.push(b);} if(!patBytes){ setStatus(hexStatus,'Unrepresentable char in '+encodingSelect.value.toUpperCase(),'err'); return; } } else { const enc=new TextEncoder(); patBytes=[...enc.encode(q)]; } outer2: for(let i=0;i<=bytes.length-patBytes.length;i++){ for(let j=0;j<patBytes.length;j++) if(bytes[i+j]!==patBytes[j]) continue outer2; idx=i; break; } }
+    if(idx>=0){ const pageSize=Math.max(16,(+pageSizeInput.value||256)); const page=Math.floor(idx/pageSize); gotoPage(page); requestAnimationFrame(()=>{ const cell=grid.querySelector(`input.hex-cell[data-idx='${idx}']`); if(cell){ cell.focus(); cell.scrollIntoView({block:'center'}); cell.classList.add('hit'); setTimeout(()=>cell.classList.remove('hit'),1200); } }); setStatus(hexStatus,'Found at offset 0x'+idx.toString(16),'ok'); } else setStatus(hexStatus,'Not found','err'); }
+  const copyText=text=> navigator.clipboard.writeText(text).then(()=> setStatus(outputStatus,'Copied to clipboard','ok')).catch(e=> setStatus(outputStatus,'Copy failed: '+e,'err'));
+  const download=(name,blob)=>{ const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download=name; a.click(); setTimeout(()=>URL.revokeObjectURL(a.href),2000); };
+  els('decodeBtn').addEventListener('click', ()=>{ try{ bytes=decodeBase64ToBytes(b64In.value); setStatus(inputStatus,`Decoded ${fmt(bytes.length)} bytes`,'ok'); dirty=false; currentPage=0; render(); }catch(e){ setStatus(inputStatus,e.message,'err'); } });
+  els('clearBtn').addEventListener('click', ()=>{ b64In.value=''; b64Out.value=''; bytes=new Uint8Array(); render(); setStatus(inputStatus,'Cleared',''); setStatus(hexStatus,'',''); setStatus(outputStatus,'',''); });
+  els('refreshBase64Btn').addEventListener('click', ()=>{ try{ b64Out.value=bytesToBase64(bytes); dirty=false; setStatus(outputStatus,'Base64 updated','ok'); setStatus(hexStatus,'All changes encoded','ok'); }catch(e){ setStatus(outputStatus,'Failed: '+e.message,'err'); } });
+  els('copyB64Btn').addEventListener('click', ()=> copyText(b64Out.value));
+  els('downloadB64Btn').addEventListener('click', ()=> download('edited.b64', new Blob([b64Out.value],{type:'text/plain'})) );
+  els('downloadBinBtn').addEventListener('click', ()=> download('edited.bin', new Blob([bytes],{type:'application/octet-stream'})) );
+  els('downloadTxtBtn').addEventListener('click', ()=>{ const enc=exportEncodingSelect.value; let out=''; for(const byte of bytes) out+=byteToChar(byte, enc==='ascii'?'ascii':enc); download(`export-${enc}.txt`, new Blob([out],{type:'text/plain'})); setStatus(outputStatus,`Exported text (${enc})`,'ok'); });
+  pageSizeInput.addEventListener('change', ()=>{ currentPage=0; render(); });
+  els('firstPageBtn').addEventListener('click', ()=> gotoPage(0));
+  els('prevPageBtn').addEventListener('click', ()=> changePage(-1));
+  els('nextPageBtn').addEventListener('click', ()=> changePage(1));
+  els('lastPageBtn').addEventListener('click', ()=>{ const pageSize=Math.max(16,(+pageSizeInput.value||256)); gotoPage(Math.ceil(bytes.length/pageSize)-1); });
+  els('jumpBtn').addEventListener('click', ()=>{ const v=+els('jumpPage').value; if(v>0) gotoPage(v-1); });
+  els('searchBtn').addEventListener('click', search); els('searchBox').addEventListener('keydown', e=>{ if(e.key==='Enter') search(); });
+  els('copyPageHexBtn').addEventListener('click', ()=>{ const pageSize=Math.max(16,(+pageSizeInput.value||256)); const start=currentPage*pageSize; const end=Math.min(start+pageSize, bytes.length); let hex=[]; for(let i=start;i<end;i++) hex.push(bytes[i].toString(16).padStart(2,'0')); copyText(hex.join(' ')); });
+  els('copySelectionBtn').addEventListener('click', ()=>{ const active=document.activeElement; if(active && active.classList.contains('hex-cell')) copyText(active.value); else setStatus(outputStatus,'Focus a hex cell to copy its byte',''); });
+  encodingSelect.addEventListener('change', ()=>{ finishAsciiEdit(); render(); setStatus(hexStatus,'Primary view: '+encodingSelect.selectedOptions[0].text,'ok'); });
+  secondaryEncodingSelect.addEventListener('change', ()=>{ finishAsciiEdit(); render(); setStatus(hexStatus,'Secondary view: '+secondaryEncodingSelect.selectedOptions[0].text,''); });
+  els('loadBinaryBtn').addEventListener('click', ()=>{ const f=els('fileInput').files[0]; if(!f) return setStatus(inputStatus,'No file selected',''); const fr=new FileReader(); fr.onload=e=>{ bytes=new Uint8Array(e.target.result); setStatus(inputStatus,`Loaded binary ${f.name} (${fmt(bytes.length)} bytes`,'ok'); currentPage=0; render(); b64In.value=bytesToBase64(bytes); }; fr.onerror=()=> setStatus(inputStatus,'File read error','err'); fr.readAsArrayBuffer(f); });
+  els('loadB64Btn').addEventListener('click', ()=>{ const f=els('fileInput').files[0]; if(!f) return setStatus(inputStatus,'No file selected',''); const fr=new FileReader(); fr.onload=e=>{ b64In.value=e.target.result; setStatus(inputStatus,`Loaded base64 text file ${f.name}`,'ok'); }; fr.readAsText(f); });
+  globalThis.addEventListener('keydown', e=>{ if(e.ctrlKey && e.key==='s'){ e.preventDefault(); els('refreshBase64Btn').click(); } });
+  render();
+})();
+</script>
+</body>
+</html>

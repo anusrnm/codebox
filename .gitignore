@@ -81,3 +81,7 @@ coverage/
 # Others
 build/
 dist/
+temp/
+tmp/
+out/
+logs/
