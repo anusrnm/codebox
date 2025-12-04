@@ -1,12 +1,23 @@
 #!/usr/bin/env node
 
-import { readdirSync, statSync, existsSync } from 'fs';
-import { resolve, join } from 'path';
-import { spawn } from 'child_process';
-import os from 'os';
+import { readdirSync, statSync, existsSync } from 'node:fs';
+import { resolve, join } from 'node:path';
+import { spawn } from 'node:child_process';
+import os from 'node:os';
 
 const ERROR = '❌';
 const INFO = 'ℹ️';
+
+let abort = false;
+
+process.on('SIGINT', () => {
+    console.log('\nAborting...');
+    abort = true;
+});
+
+const spinnerChars = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'];
+let spinnerIndex = 0;
+let spinnerInterval;
 
 function getDirSize(dirPath) {
     let total = 0;
@@ -101,10 +112,9 @@ function reportTargetDirs(targetDirs, targetSizes) {
 
 function cleanMavenInTargetDirAsync(itemPath, mvnPath) {
     return new Promise((resolve) => {
-        const proc = spawn(mvnPath, ['-q', 'clean'], { cwd: itemPath, shell: false });
+        const proc = spawn(`${mvnPath} -q clean`, [], { cwd: itemPath, shell: true });
         proc.on('close', (code) => {
             if (code === 0) {
-                console.log(`Maven clean executed successfully in '${itemPath}'.`);
                 resolve({ path: itemPath, error: '' });
             } else {
                 resolve({ path: itemPath, error: `Error executing mvn clean: exit code ${code}` });
@@ -120,20 +130,28 @@ async function cleanDirs(targetDirs, mvnPath, concurrency = os.cpus().length) {
     const cleaned = [];
     const errors = [];
     let index = 0;
+    let processed = 0;
+
+    spinnerInterval = setInterval(() => {
+        process.stdout.write(`\r${spinnerChars[spinnerIndex++ % spinnerChars.length]} Cleaning... ${processed}/${targetDirs.length}`);
+    }, 100);
 
     async function worker() {
-        while (index < targetDirs.length) {
+        while (index < targetDirs.length && !abort) {
             const dirPath = targetDirs[index++];
             const result = await cleanMavenInTargetDirAsync(dirPath, mvnPath);
-            if (!result.error) {
-                cleaned.push(result.path);
-            } else {
+            processed++;
+            if (result.error) {
                 errors.push(result);
+            } else {
+                cleaned.push(result.path);
             }
         }
     }
 
-    await Promise.all(Array(concurrency).fill().map(worker));
+    await Promise.all(new Array(concurrency).fill().map(worker));
+    clearInterval(spinnerInterval);
+    process.stdout.write('\rDone cleaning.\n');
     return { cleaned, errors };
 }
 
@@ -171,6 +189,8 @@ async function main() {
     const { basePath, dryRun } = parseArgs();
     validateBasePath(basePath);
 
+    const startTime = process.hrtime.bigint();
+
     const mvnPath = resolveMvnPath();
     const targetDirs = findTargetDirs(basePath);
 
@@ -190,6 +210,10 @@ async function main() {
 
     const { cleaned, errors } = await cleanDirs(targetDirs, mvnPath);
     reportCleaned(cleaned, errors, targetSizes);
+
+    const endTime = process.hrtime.bigint();
+    const timeTaken = Number(endTime - startTime) / 1e9;
+    console.log(`\n${INFO} Time taken: ${timeTaken.toFixed(2)}s`);
 }
 
-main();
+await main();
