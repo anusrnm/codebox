@@ -9,10 +9,15 @@ const ERROR = '❌';
 const INFO = 'ℹ️';
 
 let abort = false;
+let runningProcs = [];
 
 process.on('SIGINT', () => {
     console.log('\nAborting...');
     abort = true;
+    for (const proc of runningProcs) {
+        proc.kill('SIGTERM');
+    }
+    runningProcs = [];
 });
 
 const spinnerChars = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'];
@@ -113,7 +118,9 @@ function reportTargetDirs(targetDirs, targetSizes) {
 function cleanMavenInTargetDirAsync(itemPath, mvnPath) {
     return new Promise((resolve) => {
         const proc = spawn(`${mvnPath} -q clean`, [], { cwd: itemPath, shell: true });
+        runningProcs.push(proc);
         proc.on('close', (code) => {
+            runningProcs = runningProcs.filter(p => p !== proc);
             if (code === 0) {
                 resolve({ path: itemPath, error: '' });
             } else {
@@ -121,6 +128,7 @@ function cleanMavenInTargetDirAsync(itemPath, mvnPath) {
             }
         });
         proc.on('error', (e) => {
+            runningProcs = runningProcs.filter(p => p !== proc);
             resolve({ path: itemPath, error: `OS error: ${e.message}` });
         });
     });
@@ -129,18 +137,24 @@ function cleanMavenInTargetDirAsync(itemPath, mvnPath) {
 async function cleanDirs(targetDirs, mvnPath, concurrency = os.cpus().length) {
     const cleaned = [];
     const errors = [];
-    let index = 0;
-    let processed = 0;
+    let shared = { index: 0, processed: 0 };
 
     spinnerInterval = setInterval(() => {
-        process.stdout.write(`\r${spinnerChars[spinnerIndex++ % spinnerChars.length]} Cleaning... ${processed}/${targetDirs.length}`);
+        process.stdout.write(`\r${spinnerChars[spinnerIndex++ % spinnerChars.length]} Cleaning... ${shared.processed}/${targetDirs.length}`);
     }, 100);
 
     async function worker() {
-        while (index < targetDirs.length && !abort) {
-            const dirPath = targetDirs[index++];
+        while (true) {
+            if (abort) break;
+            let dirPath;
+            // Atomically increment index
+            if (shared.index < targetDirs.length) {
+                dirPath = targetDirs[shared.index++];
+            } else {
+                break;
+            }
             const result = await cleanMavenInTargetDirAsync(dirPath, mvnPath);
-            processed++;
+            shared.processed++;
             if (result.error) {
                 errors.push(result);
             } else {
@@ -151,7 +165,11 @@ async function cleanDirs(targetDirs, mvnPath, concurrency = os.cpus().length) {
 
     await Promise.all(new Array(concurrency).fill().map(worker));
     clearInterval(spinnerInterval);
-    process.stdout.write('\rDone cleaning.\n');
+    if (abort) {
+        process.stdout.write('\rAborted.\n');
+    } else {
+        process.stdout.write('\rDone cleaning.\n');
+    }
     return { cleaned, errors };
 }
 
