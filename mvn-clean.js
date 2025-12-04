@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-import { readdirSync, statSync, existsSync } from 'node:fs';
+import { readdirSync, statSync, existsSync, rmSync } from 'node:fs';
 import { resolve, join } from 'node:path';
 import { spawn } from 'node:child_process';
 import os from 'node:os';
@@ -53,21 +53,22 @@ function formatSize(bytes) {
     return `${bytes.toFixed(2)} ${units[i]}`;
 }
 
-function findTargetDirs(basePath) {
-    const dirs = [];
+function findProjectsToClean(basePath) {
+    const projects = [];
     for (const item of readdirSync(basePath)) {
         const itemPath = join(basePath, item);
-        const targetFolder = join(itemPath, 'target');
+        if (!statSync(itemPath).isDirectory()) continue;
         const pom = join(itemPath, 'pom.xml');
-        if (
-            existsSync(targetFolder) &&
-            statSync(targetFolder).isDirectory() &&
-            existsSync(pom)
-        ) {
-            dirs.push(itemPath);
+        const packageJson = join(itemPath, 'package.json');
+        const targetFolder = join(itemPath, 'target');
+        const nodeModules = join(itemPath, 'node_modules');
+        if (existsSync(pom) && existsSync(targetFolder)) {
+            projects.push({ path: itemPath, type: 'maven', cleanFolder: 'target' });
+        } else if (existsSync(packageJson) && existsSync(nodeModules)) {
+            projects.push({ path: itemPath, type: 'node', cleanFolder: 'node_modules' });
         }
     }
-    return dirs;
+    return projects;
 }
 
 
@@ -104,56 +105,68 @@ function validateBasePath(basePath) {
     }
 }
 
-function reportTargetDirs(targetDirs, targetSizes) {
-    console.log(`${INFO} Found ${targetDirs.length} Maven project(s) to clean.`);
-    let totalBytes = Object.values(targetSizes).reduce((a, b) => a + b, 0);
+function reportProjects(projects, sizes) {
+    console.log(`${INFO} Found ${projects.length} project(s) to clean.`);
+    let totalBytes = Object.values(sizes).reduce((a, b) => a + b, 0);
     console.log(`${INFO} Total disk space that will be reclaimed: ${formatSize(totalBytes)}`);
-    console.log(`\n${INFO} Directories to be cleaned:`);
-    for (const dirPath of targetDirs) {
-        const size = targetSizes[dirPath] || 0;
-        console.log(` - ${dirPath} (${formatSize(size)})`);
+    console.log(`\n${INFO} Projects to be cleaned:`);
+    for (const proj of projects) {
+        const size = sizes[proj.path] || 0;
+        console.log(` - ${proj.path} (${proj.type}) (${formatSize(size)})`);
     }
 }
 
-function cleanMavenInTargetDirAsync(itemPath, mvnPath) {
-    return new Promise((resolve) => {
-        const proc = spawn(`${mvnPath} -q clean`, [], { cwd: itemPath, shell: true });
-        runningProcs.push(proc);
-        proc.on('close', (code) => {
-            runningProcs = runningProcs.filter(p => p !== proc);
-            if (code === 0) {
-                resolve({ path: itemPath, error: '' });
-            } else {
-                resolve({ path: itemPath, error: `Error executing mvn clean: exit code ${code}` });
-            }
+async function cleanProjectAsync(proj) {
+    const { path, type, cleanFolder } = proj;
+    if (type === 'maven') {
+        const mvnPath = resolveMvnPath();
+        return new Promise((resolve) => {
+            const proc = spawn(`${mvnPath} -q clean`, [], { cwd: path, shell: true });
+            runningProcs.push(proc);
+            proc.on('close', (code) => {
+                runningProcs = runningProcs.filter(p => p !== proc);
+                if (code === 0) {
+                    resolve({ path, error: '' });
+                } else {
+                    resolve({ path, error: `Error executing mvn clean: exit code ${code}` });
+                }
+            });
+            proc.on('error', (e) => {
+                runningProcs = runningProcs.filter(p => p !== proc);
+                resolve({ path, error: `OS error: ${e.message}` });
+            });
         });
-        proc.on('error', (e) => {
-            runningProcs = runningProcs.filter(p => p !== proc);
-            resolve({ path: itemPath, error: `OS error: ${e.message}` });
-        });
-    });
+    } else if (type === 'node') {
+        try {
+            rmSync(join(path, cleanFolder), { recursive: true, force: true });
+            return { path, error: '' };
+        } catch (e) {
+            return { path, error: `Error removing ${cleanFolder}: ${e.message}` };
+        }
+    } else {
+        return { path, error: 'Unknown project type' };
+    }
 }
 
-async function cleanDirs(targetDirs, mvnPath, concurrency = os.cpus().length) {
+async function cleanProjects(projects, concurrency = os.cpus().length) {
     const cleaned = [];
     const errors = [];
     let shared = { index: 0, processed: 0 };
 
     spinnerInterval = setInterval(() => {
-        process.stdout.write(`\r${spinnerChars[spinnerIndex++ % spinnerChars.length]} Cleaning... ${shared.processed}/${targetDirs.length}`);
+        process.stdout.write(`\r${spinnerChars[spinnerIndex++ % spinnerChars.length]} Cleaning... ${shared.processed}/${projects.length}`);
     }, 100);
 
     async function worker() {
         while (true) {
             if (abort) break;
-            let dirPath;
-            // Atomically increment index
-            if (shared.index < targetDirs.length) {
-                dirPath = targetDirs[shared.index++];
+            let proj;
+            if (shared.index < projects.length) {
+                proj = projects[shared.index++];
             } else {
                 break;
             }
-            const result = await cleanMavenInTargetDirAsync(dirPath, mvnPath);
+            const result = await cleanProjectAsync(proj);
             shared.processed++;
             if (result.error) {
                 errors.push(result);
@@ -173,12 +186,12 @@ async function cleanDirs(targetDirs, mvnPath, concurrency = os.cpus().length) {
     return { cleaned, errors };
 }
 
-function reportCleaned(cleaned, errors, targetSizes) {
-    console.log(`\n${INFO} Cleaned directories:`);
+function reportCleaned(cleaned, errors, sizes) {
+    console.log(`\n${INFO} Cleaned projects:`);
     for (const c of cleaned) {
         console.log(` - ${c}`);
     }
-    console.log(` ${INFO} Total cleaned directories: ${cleaned.length}`);
+    console.log(` ${INFO} Total cleaned projects: ${cleaned.length}`);
 
     if (errors.length > 0) {
         console.log(`\n${ERROR} Errors encountered:`);
@@ -188,19 +201,19 @@ function reportCleaned(cleaned, errors, targetSizes) {
         console.log(` ${ERROR} Total errors: ${errors.length}`);
     }
 
-    const reclaimedBytes = cleaned.reduce((sum, path) => sum + (targetSizes[path] || 0), 0);
+    const reclaimedBytes = cleaned.reduce((sum, path) => sum + (sizes[path] || 0), 0);
     console.log(`\n${INFO} Total disk space reclaimed: ${formatSize(reclaimedBytes)}`);
 }
 
-function getTargetSizes(targetDirs) {
-    const targetSizes = {};
-    for (const dirPath of targetDirs) {
-        const targetFolder = join(dirPath, 'target');
-        if (existsSync(targetFolder)) {
-            targetSizes[dirPath] = getDirSize(targetFolder);
+function getCleanSizes(projects) {
+    const sizes = {};
+    for (const proj of projects) {
+        const folder = join(proj.path, proj.cleanFolder);
+        if (existsSync(folder)) {
+            sizes[proj.path] = getDirSize(folder);
         }
     }
-    return targetSizes;
+    return sizes;
 }
 
 async function main() {
@@ -209,25 +222,24 @@ async function main() {
 
     const startTime = process.hrtime.bigint();
 
-    const mvnPath = resolveMvnPath();
-    const targetDirs = findTargetDirs(basePath);
+    const projects = findProjectsToClean(basePath);
 
-    if (targetDirs.length === 0) {
+    if (projects.length === 0) {
         const absolutePath = resolve(basePath);
-        console.log(`${ERROR} No Maven target directories found in '${absolutePath}'.`);
+        console.log(`${ERROR} No projects found to clean in '${absolutePath}'.`);
         return;
     }
 
-    const targetSizes = getTargetSizes(targetDirs);
-    reportTargetDirs(targetDirs, targetSizes);
+    const sizes = getCleanSizes(projects);
+    reportProjects(projects, sizes);
 
     if (dryRun) {
-        console.log(`\n${INFO} Dry run: No directories were cleaned.`);
+        console.log(`\n${INFO} Dry run: No projects were cleaned.`);
         return;
     }
 
-    const { cleaned, errors } = await cleanDirs(targetDirs, mvnPath);
-    reportCleaned(cleaned, errors, targetSizes);
+    const { cleaned, errors } = await cleanProjects(projects);
+    reportCleaned(cleaned, errors, sizes);
 
     const endTime = process.hrtime.bigint();
     const timeTaken = Number(endTime - startTime) / 1e9;
