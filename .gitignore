@@ -6,6 +6,7 @@ Thumbs.db
 *.swp
 *.swo
 *.bak
+*.patch
 
 # Node.js
 node_modules/
@@ -27,8 +28,6 @@ ENV/
 *.exe
 *.test
 *.out
-*.mod
-*.sum
 bin/
 
 # C/C++

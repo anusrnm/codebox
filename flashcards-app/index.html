@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="theme-color" content="#111827" />
+  <title>Language Flashcards</title>
+  <link
+    rel="icon"
+    type="image/png"
+    href="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMB/6X8xQAAAABJRU5ErkJggg=="
+  />
+  <link rel="manifest" href="manifest.webmanifest" />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div class="app">
+    <header class="app-header">
+      <h1>Language Flashcards</h1>
+      <div class="header-controls">
+        <label class="field">
+          <span>Language</span>
+          <select id="languageSelect"></select>
+        </label>
+        <label class="field">
+          <span>Mode</span>
+          <select id="modeSelect">
+            <option value="letters">Letters</option>
+            <option value="words">Words</option>
+            <option value="vyanjan">Vyanjan (Consonants)</option>
+            <option value="mixed">Mixed consonants</option>
+            <option value="all">All (Mixed)</option>
+          </select>
+        </label>
+      </div>
+    </header>
+
+    <main class="app-main">
+      <section class="card-shell">
+        <div id="flashcard" class="card card-animate-in">
+          <div class="card-front">
+            <div class="card-main" id="cardMain"></div>
+            <div class="card-sub" id="cardSub"></div>
+          </div>
+        </div>
+      </section>
+
+      <section class="controls">
+        <button id="prevBtn" class="btn secondary" type="button">◀ Prev</button>
+        <button id="shuffleBtn" class="btn ghost" type="button">Shuffle</button>
+        <button id="nextBtn" class="btn primary" type="button">Next ▶</button>
+      </section>
+
+      <section class="progress">
+        <span id="progressText">0 / 0</span>
+      </section>
+    </main>
+
+    <footer class="app-footer">
+      <span>Tip: Add this page to your home screen for offline use.</span>
+    </footer>
+  </div>
+
+  <script src="app.js" type="module"></script>
+</body>
+</html>

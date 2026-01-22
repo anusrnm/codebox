@@ -115,7 +115,7 @@ async function buildInOrder(projects, quiet = false) {
     
     const startTime = performance.now();
     const summary = [];
-    const logDir = 'build_logs';
+    const logDir = 'build';
     const dryRun = buildInOrder.dryRun || false;
     // Removed unused mvnOnly variable
     await fs.mkdir(logDir, { recursive: true });
