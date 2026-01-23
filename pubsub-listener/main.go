@@ -23,7 +23,7 @@ import (
 )
 
 // Version info
-const version = "1.2.0"
+const version = "1.2.1"
 
 // ANSI color codes for terminal output
 const (
@@ -266,19 +266,27 @@ func main() {
 		defer wg.Done()
 		sub.ReceiveSettings.MaxOutstandingMessages = 100
 		err := sub.Receive(ctx, func(ctx context.Context, m *pubsub.Message) {
-			// Check if we've reached max messages
-			if config.MaxMessages > 0 && atomic.LoadInt64(&stats.MessagesReceived) >= config.MaxMessages {
+			// Increment first so we know which ordinal this message is
+			count := atomic.AddInt64(&stats.MessagesReceived, 1)
+
+			// If we already passed the cap, don't process; roll back the counter to keep stats accurate
+			if config.MaxMessages > 0 && count > config.MaxMessages {
+				atomic.AddInt64(&stats.MessagesReceived, -1)
 				m.Nack()
 				cancel()
 				return
 			}
 
-			atomic.AddInt64(&stats.MessagesReceived, 1)
 			atomic.AddInt64(&stats.BytesReceived, int64(len(m.Data)))
 
 			handleMessage(m)
 
 			atomic.AddInt64(&stats.MessagesProcessed, 1)
+
+			// Cancel after handling the Nth message so Receive exits promptly
+			if config.MaxMessages > 0 && count == config.MaxMessages {
+				cancel()
+			}
 		})
 		if err != nil && ctx.Err() == nil {
 			logError("Receive error: %v", err)
@@ -712,7 +720,7 @@ func logInfo(format string, args ...interface{}) {
 		return
 	}
 	msg := fmt.Sprintf(format, args...)
-	fmt.Printf("%s[INFO]%s %s\n", colorBlue, colorReset, msg)
+	fmt.Printf("%s[i]%s %s\n", colorBlue, colorReset, msg)
 }
 
 func logSuccess(format string, args ...interface{}) {
@@ -738,5 +746,5 @@ func logVerbose(format string, args ...interface{}) {
 		return
 	}
 	msg := fmt.Sprintf(format, args...)
-	fmt.Printf("%s[DEBUG]%s %s\n", colorGray, colorReset, msg)
+	fmt.Printf("%s[⚙]%s %s\n", colorGray, colorReset, msg)
 }
