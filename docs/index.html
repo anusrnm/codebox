@@ -293,6 +293,130 @@
             font-size: 0.9rem;
         }
 
+        /* Interest Lab */
+        .interest {
+            padding: 4rem 2rem;
+            border-bottom: 1px solid var(--border);
+            background: linear-gradient(135deg, rgba(88, 166, 255, 0.06) 0%, rgba(63, 185, 80, 0.05) 100%);
+        }
+
+        .interest .section-title {
+            margin-bottom: 1rem;
+        }
+
+        .section-lead {
+            color: var(--text-secondary);
+            text-align: center;
+            margin-bottom: 2rem;
+            font-size: 1.05rem;
+        }
+
+        .interest-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+            gap: 1.5rem;
+        }
+
+        .panel {
+            background: var(--secondary);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            padding: 1.5rem;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.25);
+        }
+
+        .panel h3 {
+            color: var(--accent);
+            margin-bottom: 1rem;
+        }
+
+        .controls-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+            gap: 1rem;
+        }
+
+        .field {
+            display: flex;
+            flex-direction: column;
+            gap: 0.35rem;
+        }
+
+        .field label {
+            color: var(--text);
+            font-weight: 600;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .field small {
+            color: var(--text-secondary);
+        }
+
+        .field input,
+        .field select {
+            background: var(--primary);
+            border: 1px solid var(--border);
+            color: var(--text);
+            padding: 0.6rem 0.75rem;
+            border-radius: 6px;
+            outline: none;
+        }
+
+        .field input[type="range"] {
+            accent-color: var(--accent);
+            cursor: pointer;
+        }
+
+        .chips {
+            display: flex;
+            gap: 0.5rem;
+            flex-wrap: wrap;
+            margin: 1rem 0 0.5rem;
+        }
+
+        .chip {
+            background: rgba(88, 166, 255, 0.12);
+            color: var(--accent);
+            padding: 0.4rem 0.75rem;
+            border-radius: 999px;
+            border: 1px solid var(--border);
+            font-size: 0.85rem;
+            font-weight: 600;
+        }
+
+        .results-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1rem;
+            margin: 1rem 0 1.5rem;
+        }
+
+        .metric {
+            background: var(--primary);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 1rem;
+        }
+
+        .metric h4 {
+            color: var(--text-secondary);
+            font-size: 0.95rem;
+            margin-bottom: 0.35rem;
+        }
+
+        .metric .value {
+            font-size: 1.4rem;
+            font-weight: 700;
+        }
+
+        .note {
+            color: var(--text-secondary);
+            font-size: 0.9rem;
+            margin-top: 0.5rem;
+        }
+
         /* Responsive */
         @media (max-width: 768px) {
             .hero h1 {
@@ -347,6 +471,7 @@
             <a href="#" class="nav-logo">📦 CodeBox</a>
             <ul class="nav-links">
                 <li><a href="#projects">Projects</a></li>
+                <li><a href="#interest">Interest Lab</a></li>
                 <li><a href="#features">Features</a></li>
                 <li><a href="https://github.com/anusrnm/codebox" target="_blank">GitHub</a></li>
             </ul>
@@ -433,6 +558,81 @@
         </div>
     </section>
 
+    <!-- Interest Calculator Section -->
+    <section class="interest" id="interest">
+        <div class="container">
+            <h2 class="section-title">Real-Time Interest Lab</h2>
+            <p class="section-lead">Experiment with simple, compound, and continuous interest. Adjust values and watch the chart update instantly.</p>
+
+            <div class="interest-grid">
+                <div class="panel">
+                    <h3>Inputs</h3>
+                    <form id="interestForm" class="controls-grid">
+                        <div class="field">
+                            <label for="principal">Principal <small id="principalLabel"></small></label>
+                            <input type="number" id="principal" name="principal" min="0" step="100" value="10000">
+                        </div>
+
+                        <div class="field">
+                            <label for="rate">Annual Rate (%) <small id="rateLabel"></small></label>
+                            <input type="range" id="rate" name="rate" min="0" max="20" step="0.1" value="7">
+                        </div>
+
+                        <div class="field">
+                            <label for="years">Years <small id="yearsLabel"></small></label>
+                            <input type="range" id="years" name="years" min="1" max="40" step="0.5" value="15">
+                        </div>
+
+                        <div class="field">
+                            <label for="contribution">Monthly Contribution <small id="contributionLabel"></small></label>
+                            <input type="number" id="contribution" name="contribution" min="0" step="50" value="300">
+                        </div>
+
+                        <div class="field">
+                            <label for="frequency">Compounding Frequency</label>
+                            <select id="frequency" name="frequency">
+                                <option value="1">Annual (1x)</option>
+                                <option value="4">Quarterly (4x)</option>
+                                <option value="12" selected>Monthly (12x)</option>
+                                <option value="365">Daily (365x)</option>
+                            </select>
+                        </div>
+                    </form>
+
+                    <div class="chips" aria-hidden="true">
+                        <span class="chip">Live recalculation</span>
+                        <span class="chip">Monthly contributions</span>
+                        <span class="chip">Time-step resolution: months</span>
+                    </div>
+                </div>
+
+                <div class="panel">
+                    <h3>Projection</h3>
+                    <div class="results-grid">
+                        <div class="metric">
+                            <h4>Simple Final</h4>
+                            <div class="value" id="simpleTotal">$0</div>
+                        </div>
+                        <div class="metric">
+                            <h4>Compound Final</h4>
+                            <div class="value" id="compoundTotal">$0</div>
+                        </div>
+                        <div class="metric">
+                            <h4>Continuous Final</h4>
+                            <div class="value" id="continuousTotal">$0</div>
+                        </div>
+                        <div class="metric">
+                            <h4>Total Invested</h4>
+                            <div class="value" id="contributionTotal">$0</div>
+                        </div>
+                    </div>
+
+                    <p class="note">Simple interest accrues on the starting principal only. Compound and continuous interest grow on the entire balance (principal + contributions) using a monthly time step. Totals above update instantly as you tweak the inputs.</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
     <!-- Features Section -->
     <section class="features" id="features">
         <div class="container">
@@ -482,5 +682,95 @@
             <p class="footer-text">© 2026 CodeBox. Built with ❤️ for developers.</p>
         </div>
     </footer>
+
+    <script>
+        (() => {
+            const principalInput = document.getElementById('principal');
+            const rateInput = document.getElementById('rate');
+            const yearsInput = document.getElementById('years');
+            const contributionInput = document.getElementById('contribution');
+            const frequencyInput = document.getElementById('frequency');
+
+            const principalLabel = document.getElementById('principalLabel');
+            const rateLabel = document.getElementById('rateLabel');
+            const yearsLabel = document.getElementById('yearsLabel');
+            const contributionLabel = document.getElementById('contributionLabel');
+
+            const simpleTotal = document.getElementById('simpleTotal');
+            const compoundTotal = document.getElementById('compoundTotal');
+            const continuousTotal = document.getElementById('continuousTotal');
+            const contributionTotal = document.getElementById('contributionTotal');
+
+            const formatCurrency = (value) => value.toLocaleString('en-US', {
+                style: 'currency',
+                currency: 'USD',
+                maximumFractionDigits: 0,
+            });
+
+            const clamp = (value, min) => (Number.isFinite(value) && value >= min ? value : min);
+
+            const computeProjection = (principal, rate, years, monthlyContribution, freq) => {
+                const months = Math.max(1, Math.round(years * 12));
+                const rateDecimal = rate / 100;
+                const compoundMonthlyRate = Math.pow(1 + rateDecimal / freq, freq / 12) - 1;
+                const continuousMonthlyRate = Math.exp(rateDecimal / 12) - 1;
+
+                let simpleInterest = 0;
+                let compoundBalance = principal;
+                let continuousBalance = principal;
+
+                for (let month = 1; month <= months; month += 1) {
+                    simpleInterest += principal * (rateDecimal / 12);
+
+                    compoundBalance = (compoundBalance + monthlyContribution) * (1 + compoundMonthlyRate);
+                    continuousBalance = (continuousBalance + monthlyContribution) * (1 + continuousMonthlyRate);
+                }
+
+                const simpleBalance = principal + simpleInterest + monthlyContribution * months;
+
+                return { simpleBalance, compoundBalance, continuousBalance, months };
+            };
+
+            const update = () => {
+                const principal = clamp(Number(principalInput.value), 0);
+                const rate = clamp(Number(rateInput.value), 0);
+                const years = clamp(Number(yearsInput.value), 1);
+                const contribution = clamp(Number(contributionInput.value), 0);
+                const frequency = clamp(Number(frequencyInput.value), 1);
+
+                principalInput.value = principal;
+                rateInput.value = rate;
+                yearsInput.value = years;
+                contributionInput.value = contribution;
+
+                principalLabel.textContent = formatCurrency(principal);
+                rateLabel.textContent = `${rate.toFixed(1)}%`;
+                yearsLabel.textContent = `${years.toFixed(1)} yrs`;
+                contributionLabel.textContent = formatCurrency(contribution);
+
+                const { simpleBalance, compoundBalance, continuousBalance, months } = computeProjection(
+                    principal,
+                    rate,
+                    years,
+                    contribution,
+                    frequency,
+                );
+
+                const totalContributions = principal + contribution * months;
+
+                simpleTotal.textContent = formatCurrency(simpleBalance);
+                compoundTotal.textContent = formatCurrency(compoundBalance);
+                continuousTotal.textContent = formatCurrency(continuousBalance);
+                contributionTotal.textContent = formatCurrency(totalContributions);
+            };
+
+            [principalInput, rateInput, yearsInput, contributionInput, frequencyInput].forEach((input) => {
+                input.addEventListener('input', update);
+                input.addEventListener('change', update);
+            });
+
+            update();
+        })();
+    </script>
 </body>
 </html>
