@@ -1,5 +1,18 @@
 #!/usr/bin/env node
 
+/**
+ * Generic Project Cleaner
+ * 
+ * Cleans build artifacts and dependencies from various project types:
+ * - Maven (Java): target/
+ * - Node.js: node_modules/
+ * - Go: vendor/, bin/, *.exe, *.out
+ * - Python: __pycache__/, dist/, build/, *.egg-info/, .pytest_cache/, .tox/
+ * - Rust: target/
+ * - .NET: bin/, obj/
+ * - Gradle: build/, .gradle/
+ */
+
 import { readdirSync, statSync, existsSync, rmSync } from 'node:fs';
 import { resolve, join } from 'node:path';
 import { spawn } from 'node:child_process';
@@ -7,6 +20,54 @@ import os from 'node:os';
 
 const ERROR = '❌';
 const INFO = 'ℹ️';
+
+// Project type definitions
+const PROJECT_TYPES = [
+    {
+        name: 'maven',
+        detectionFiles: ['pom.xml'],
+        cleanFolders: ['target'],
+        cleanCommand: (path) => ({ type: 'spawn', cmd: resolveMvnPath(), args: ['-q', 'clean'], cwd: path })
+    },
+    {
+        name: 'node',
+        detectionFiles: ['package.json'],
+        cleanFolders: ['node_modules'],
+        cleanCommand: null // Direct deletion
+    },
+    {
+        name: 'go',
+        detectionFiles: ['go.mod'],
+        cleanFolders: ['vendor', 'bin'],
+        cleanCommand: null
+    },
+    {
+        name: 'python',
+        detectionFiles: ['setup.py', 'pyproject.toml', 'requirements.txt'],
+        cleanFolders: ['__pycache__', 'dist', 'build', '.pytest_cache', '.tox', '.eggs'],
+        cleanGlobs: ['*.egg-info'], // Folders matching these patterns
+        cleanCommand: null
+    },
+    {
+        name: 'rust',
+        detectionFiles: ['Cargo.toml'],
+        cleanFolders: ['target'],
+        cleanCommand: (path) => ({ type: 'spawn', cmd: 'cargo', args: ['clean'], cwd: path })
+    },
+    {
+        name: 'dotnet',
+        detectionFiles: ['.csproj', '.vbproj', '.fsproj', '.sln'],
+        detectionGlobs: ['*.csproj', '*.vbproj', '*.fsproj'],
+        cleanFolders: ['bin', 'obj'],
+        cleanCommand: null
+    },
+    {
+        name: 'gradle',
+        detectionFiles: ['build.gradle', 'build.gradle.kts'],
+        cleanFolders: ['build', '.gradle'],
+        cleanCommand: (path) => ({ type: 'spawn', cmd: resolveGradlePath(), args: ['clean'], cwd: path })
+    }
+];
 
 let abort = false;
 let runningProcs = [];
@@ -58,14 +119,63 @@ function findProjectsToClean(basePath) {
     for (const item of readdirSync(basePath)) {
         const itemPath = join(basePath, item);
         if (!statSync(itemPath).isDirectory()) continue;
-        const pom = join(itemPath, 'pom.xml');
-        const packageJson = join(itemPath, 'package.json');
-        const targetFolder = join(itemPath, 'target');
-        const nodeModules = join(itemPath, 'node_modules');
-        if (existsSync(pom) && existsSync(targetFolder)) {
-            projects.push({ path: itemPath, type: 'maven', cleanFolder: 'target' });
-        } else if (existsSync(packageJson) && existsSync(nodeModules)) {
-            projects.push({ path: itemPath, type: 'node', cleanFolder: 'node_modules' });
+        
+        // Check each project type
+        for (const projectType of PROJECT_TYPES) {
+            let isMatch = false;
+            
+            // Check detection files
+            if (projectType.detectionFiles) {
+                isMatch = projectType.detectionFiles.some(file => existsSync(join(itemPath, file)));
+            }
+            
+            // Check detection globs (for .NET projects with *.csproj)
+            if (!isMatch && projectType.detectionGlobs) {
+                const files = readdirSync(itemPath);
+                isMatch = files.some(file => 
+                    projectType.detectionGlobs.some(glob => 
+                        file.endsWith(glob.replace('*', ''))
+                    )
+                );
+            }
+            
+            if (isMatch) {
+                // Find which clean folders/globs actually exist
+                const existingCleanTargets = [];
+                
+                // Check clean folders
+                if (projectType.cleanFolders) {
+                    for (const folder of projectType.cleanFolders) {
+                        if (existsSync(join(itemPath, folder))) {
+                            existingCleanTargets.push({ type: 'folder', path: folder });
+                        }
+                    }
+                }
+                
+                // Check clean globs (like *.egg-info)
+                if (projectType.cleanGlobs) {
+                    const files = readdirSync(itemPath);
+                    for (const glob of projectType.cleanGlobs) {
+                        const pattern = glob.replace('*', '');
+                        const matches = files.filter(f => f.endsWith(pattern));
+                        for (const match of matches) {
+                            if (existsSync(join(itemPath, match))) {
+                                existingCleanTargets.push({ type: 'folder', path: match });
+                            }
+                        }
+                    }
+                }
+                
+                if (existingCleanTargets.length > 0) {
+                    projects.push({ 
+                        path: itemPath, 
+                        type: projectType.name, 
+                        cleanTargets: existingCleanTargets,
+                        cleanCommand: projectType.cleanCommand
+                    });
+                }
+                break; // Don't check other types for this directory
+            }
         }
     }
     return projects;
@@ -77,6 +187,14 @@ function resolveMvnPath() {
         return 'mvn.cmd';
     }
     return 'mvn';
+}
+
+function resolveGradlePath() {
+    // Check for gradle wrapper first
+    if (os.platform() === 'win32') {
+        return existsSync('gradlew.bat') ? 'gradlew.bat' : 'gradle.bat';
+    }
+    return existsSync('gradlew') ? './gradlew' : 'gradle';
 }
 
 function parseArgs() {
@@ -112,23 +230,26 @@ function reportProjects(projects, sizes) {
     console.log(`\n${INFO} Projects to be cleaned:`);
     for (const proj of projects) {
         const size = sizes[proj.path] || 0;
-        console.log(` - ${proj.path} (${proj.type}) (${formatSize(size)})`);
+        const targets = proj.cleanTargets.map(t => t.path).join(', ');
+        console.log(` - ${proj.path} (${proj.type}) [${targets}] (${formatSize(size)})`);
     }
 }
 
 async function cleanProjectAsync(proj) {
-    const { path, type, cleanFolder } = proj;
-    if (type === 'maven') {
-        const mvnPath = resolveMvnPath();
+    const { path, type, cleanTargets, cleanCommand } = proj;
+    
+    // If project has a clean command (maven, rust, gradle), use it
+    if (cleanCommand) {
+        const cmdInfo = cleanCommand(path);
         return new Promise((resolve) => {
-            const proc = spawn(`${mvnPath} -q clean`, [], { cwd: path, shell: true });
+            const proc = spawn(cmdInfo.cmd, cmdInfo.args, { cwd: cmdInfo.cwd, shell: true, windowsHide: true });
             runningProcs.push(proc);
             proc.on('close', (code) => {
                 runningProcs = runningProcs.filter(p => p !== proc);
                 if (code === 0) {
                     resolve({ path, error: '' });
                 } else {
-                    resolve({ path, error: `Error executing mvn clean: exit code ${code}` });
+                    resolve({ path, error: `Error executing ${type} clean: exit code ${code}` });
                 }
             });
             proc.on('error', (e) => {
@@ -136,15 +257,19 @@ async function cleanProjectAsync(proj) {
                 resolve({ path, error: `OS error: ${e.message}` });
             });
         });
-    } else if (type === 'node') {
+    } else {
+        // Direct deletion for projects without clean commands
         try {
-            rmSync(join(path, cleanFolder), { recursive: true, force: true });
+            for (const target of cleanTargets) {
+                const targetPath = join(path, target.path);
+                if (existsSync(targetPath)) {
+                    rmSync(targetPath, { recursive: true, force: true });
+                }
+            }
             return { path, error: '' };
         } catch (e) {
-            return { path, error: `Error removing ${cleanFolder}: ${e.message}` };
+            return { path, error: `Error removing folders: ${e.message}` };
         }
-    } else {
-        return { path, error: 'Unknown project type' };
     }
 }
 
@@ -208,10 +333,14 @@ function reportCleaned(cleaned, errors, sizes) {
 function getCleanSizes(projects) {
     const sizes = {};
     for (const proj of projects) {
-        const folder = join(proj.path, proj.cleanFolder);
-        if (existsSync(folder)) {
-            sizes[proj.path] = getDirSize(folder);
+        let totalSize = 0;
+        for (const target of proj.cleanTargets) {
+            const targetPath = join(proj.path, target.path);
+            if (existsSync(targetPath)) {
+                totalSize += getDirSize(targetPath);
+            }
         }
+        sizes[proj.path] = totalSize;
     }
     return sizes;
 }
