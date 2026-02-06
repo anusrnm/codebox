@@ -202,6 +202,12 @@
             transform: scaleX(1);
         }
 
+        .project-card-link {
+            text-decoration: none;
+            color: inherit;
+            display: block;
+        }
+
         .project-card h3 {
             color: var(--accent);
             margin-bottom: 0.5rem;
@@ -439,6 +445,39 @@
             .btn {
                 width: 100%;
             }
+
+            .projects-grid {
+                grid-template-columns: 1fr;
+                margin-left: auto;
+                margin-right: auto;
+            }
+
+            .project-card {
+                margin-left: auto;
+                margin-right: auto;
+                max-width: 100%;
+            }
+
+            .interest-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .controls-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .results-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .panel {
+                margin-left: auto;
+                margin-right: auto;
+            }
+
+            .features-grid {
+                grid-template-columns: 1fr;
+            }
         }
 
         /* Scroll animations */
@@ -525,7 +564,7 @@
                     </div>
                 </div>
 
-                <div class="project-card">
+                <a href="markdown-previewer.html" class="project-card project-card-link">
                     <h3>📖 Markdown Previewer</h3>
                     <p>A real-time markdown to HTML converter. Perfect for viewing and previewing markdown files in the browser.</p>
                     <div class="project-tags">
@@ -533,7 +572,17 @@
                         <span class="tag">JavaScript</span>
                         <span class="tag">Utilities</span>
                     </div>
-                </div>
+                </a>
+
+                <a href="hex-editor.html" class="project-card project-card-link">
+                    <h3>🔍 Hex Editor</h3>
+                    <p>A lightweight hex editor for viewing and editing binary files. Perfect for low-level file inspection and manipulation.</p>
+                    <div class="project-tags">
+                        <span class="tag">HTML</span>
+                        <span class="tag">JavaScript</span>
+                        <span class="tag">Utilities</span>
+                    </div>
+                </a>
 
                 <div class="project-card">
                     <h3>🔧 Build Tools</h3>
@@ -598,12 +647,6 @@
                             </select>
                         </div>
                     </form>
-
-                    <div class="chips" aria-hidden="true">
-                        <span class="chip">Live recalculation</span>
-                        <span class="chip">Monthly contributions</span>
-                        <span class="chip">Time-step resolution: months</span>
-                    </div>
                 </div>
 
                 <div class="panel">

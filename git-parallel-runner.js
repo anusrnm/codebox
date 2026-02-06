@@ -9,7 +9,7 @@
  *   node git-parallel-runner.js [options]
  * 
  * Options:
- *   --dirs <paths>         Comma-separated list of directories (default: scan current directory)
+ *   --dirs <paths>         Comma-separated list of directories with wildcard support (default: all directories)
  *   --commands <cmds>      Comma-separated git commands (default: "status,branch")
  *   --depth <n>            Scan depth for git repos (default: 1)
  *   --concurrency <n>      Max parallel executions (default: CPU cores)
@@ -63,7 +63,8 @@ function parseArgs() {
         const arg = args[i];
         switch (arg) {
             case '--dirs':
-                options.dirs = args[++i]?.split(',').map(d => d.trim()).filter(Boolean);
+                const dirArg = args[++i]?.trim();
+                options.dirs = dirArg === '*' ? [] : dirArg?.split(',').map(d => d.trim()).filter(Boolean);
                 break;
             case '--commands':
                 options.commands = args[++i]?.split(',').map(c => c.trim()).filter(Boolean);
@@ -110,7 +111,7 @@ ${colors.cyan}Usage:${colors.reset}
   node git-parallel-runner.js [options]
 
 ${colors.cyan}Options:${colors.reset}
-  --dirs <paths>         Comma-separated list of directories
+  --dirs <paths>         Comma-separated list of directories with wildcards (default: all dirs)
   --commands <cmds>      Comma-separated git commands (default: "status,branch")
   --depth <n>            Scan depth for git repos (default: 1)
   --concurrency <n>      Max parallel executions (default: ${cpus().length})
@@ -122,11 +123,14 @@ ${colors.cyan}Options:${colors.reset}
   --help                 Show this help
 
 ${colors.cyan}Examples:${colors.reset}
-  ${colors.gray}# Scan current directory for git repos${colors.reset}
+  ${colors.gray}# Scan all directories in current folder${colors.reset}
   node git-parallel-runner.js
 
   ${colors.gray}# Pull and check status in specific folders${colors.reset}
   node git-parallel-runner.js --dirs "proj1,proj2" --commands "pull,status"
+
+  ${colors.gray}# Use wildcard patterns to match directories${colors.reset}
+  node git-parallel-runner.js --dirs "app-*,lib-*" --commands "status"
 
   ${colors.gray}# Fetch all repos with custom concurrency${colors.reset}
   node git-parallel-runner.js --commands "fetch --all" --concurrency 10
@@ -145,6 +149,41 @@ async function isGitRepo(dir) {
     } catch {
         return false;
     }
+}
+
+// Simple glob pattern matcher for wildcards (* and ?)
+function globToRegex(pattern) {
+    // Escape special regex characters except * and ?
+    let regexPattern = pattern
+        .replace(/[.+^${}()|[\]\\]/g, '\\$&')
+        .replace(/\*/g, '.*')
+        .replace(/\?/g, '.');
+    return new RegExp(`^${regexPattern}$`);
+}
+
+// Match directory names against wildcard patterns
+function matchesPattern(dirName, patterns) {
+    if (patterns.length === 0) return true; // No patterns means match all
+    return patterns.some(pattern => {
+        const regex = globToRegex(pattern);
+        return regex.test(dirName);
+    });
+}
+
+// Get directories matching wildcard patterns
+async function getMatchingDirs(baseDir, patterns) {
+    const dirs = [];
+    try {
+        const entries = await readdir(baseDir, { withFileTypes: true });
+        for (const entry of entries) {
+            if (entry.isDirectory() && matchesPattern(entry.name, patterns)) {
+                dirs.push(join(baseDir, entry.name));
+            }
+        }
+    } catch (err) {
+        // Silently skip inaccessible directories
+    }
+    return dirs;
 }
 
 // Scan directory for git repositories
@@ -465,6 +504,51 @@ function generateSummary(results, repos, commands, options) {
     return summary;
 }
 
+// Display detailed results organized by repository
+function displayResults(results, options) {
+    if (options.verbose) {
+        return; // Results already displayed during verbose execution
+    }
+
+    console.log(`\n${colors.bright}${colors.cyan}Results by Repository:${colors.reset}`);
+    
+    const resultsByRepo = {};
+    for (const result of results) {
+        if (!resultsByRepo[result.repoName]) {
+            resultsByRepo[result.repoName] = [];
+        }
+        resultsByRepo[result.repoName].push(result);
+    }
+
+    for (const [repoName, repoResults] of Object.entries(resultsByRepo)) {
+        const repoSuccess = repoResults.filter(r => r.success).length;
+        const repoFailed = repoResults.filter(r => !r.success).length;
+        const statusIcon = repoFailed === 0 ? `${colors.green}✓${colors.reset}` : `${colors.red}✗${colors.reset}`;
+        
+        console.log(`\n${statusIcon} ${colors.blue}${repoName}${colors.reset} (${colors.bright}${repoSuccess}/${repoResults.length}${colors.reset})`);
+        
+        for (const result of repoResults) {
+            const cmdIcon = result.success ? `${colors.green}✓${colors.reset}` : `${colors.red}✗${colors.reset}`;
+            console.log(`  ${cmdIcon} git ${colors.bright}${result.command}${colors.reset}`);
+            
+            if (result.stdout) {
+                const lines = result.stdout.split('\n').slice(0, 3);
+                for (const line of lines) {
+                    console.log(`    ${colors.gray}${line}${colors.reset}`);
+                }
+                if (result.stdout.split('\n').length > 3) {
+                    console.log(`    ${colors.gray}... (${result.stdout.split('\n').length - 3} more lines)${colors.reset}`);
+                }
+            } else if (result.stderr) {
+                console.log(`    ${colors.red}${result.stderr}${colors.reset}`);
+            } else if (result.error) {
+                console.log(`    ${colors.red}${result.error}${colors.reset}`);
+            }
+        }
+    }
+    console.log();
+}
+
 // Main function
 async function main() {
     const options = parseArgs();
@@ -474,20 +558,45 @@ async function main() {
 
     // Determine directories to process
     let repos = [];
-    if (options.dirs) {
-        // Use provided directories
+    if (options.dirs && options.dirs.length > 0) {
+        // Use provided directories with wildcard support
+        const allDirs = [];
         for (const dir of options.dirs) {
-            const absPath = resolve(dir);
-            if (await isGitRepo(absPath)) {
-                repos.push(absPath);
+            if (dir.includes('*') || dir.includes('?')) {
+                // Wildcard pattern
+                const pattern = dir;
+                const basePath = resolve(process.cwd());
+                const matchingDirs = await getMatchingDirs(basePath, [pattern]);
+                allDirs.push(...matchingDirs);
             } else {
-                console.log(`${colors.yellow}Warning: ${dir} is not a git repository${colors.reset}`);
+                // Literal directory path
+                allDirs.push(resolve(dir));
+            }
+        }
+        
+        for (const dir of allDirs) {
+            if (await isGitRepo(dir)) {
+                repos.push(dir);
+            } else {
+                // Try scanning this directory for git repos
+                const subRepos = await scanForGitRepos(dir, options.depth, options.exclude);
+                repos.push(...subRepos);
             }
         }
     } else {
-        // Scan for git repositories
-        console.log(`${colors.gray}Scanning for git repositories (depth: ${options.depth})...${colors.reset}`);
-        repos = await scanForGitRepos(process.cwd(), options.depth, options.exclude);
+        // Default: use all directories in current folder, then scan for git repositories
+        console.log(`${colors.gray}Scanning all directories in current folder for git repositories (depth: ${options.depth})...${colors.reset}`);
+        const allDirs = await getMatchingDirs(process.cwd(), []);
+        
+        for (const dir of allDirs) {
+            if (await isGitRepo(dir)) {
+                repos.push(dir);
+            } else {
+                const subRepos = await scanForGitRepos(dir, options.depth, options.exclude);
+                repos.push(...subRepos);
+            }
+        }
+        
         console.log(`${colors.green}Found ${repos.length} git repositories${colors.reset}\n`);
     }
 
@@ -529,6 +638,9 @@ async function main() {
         }
         console.log();
     }
+
+    // Display detailed results
+    displayResults(results, options);
 
     // Save to file if requested
     if (options.output) {
