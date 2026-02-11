@@ -4,6 +4,225 @@ import { spawn } from "child_process";
 import { performance } from "perf_hooks";
 import path from "path";
 import fs from "fs/promises";
+import { existsSync, readFileSync } from "fs";
+
+// Check if a directory is a Maven project
+function isMavenProject(dir) {
+    const pomPath = path.join(dir, 'pom.xml');
+    return existsSync(pomPath);
+}
+
+// Parse pom.xml to extract parent information and artifact ID
+function parsePomFile(pomPath) {
+    try {
+        const content = readFileSync(pomPath, 'utf8');
+        
+        // Extract parent information first (looking for parent block)
+        const parentBlockMatch = content.match(/<parent>([\s\S]*?)<\/parent>/);
+        let parentGroupId = null;
+        let parentArtifactId = null;
+        let parentVersion = null;
+        let contentWithoutParent = content;
+        
+        if (parentBlockMatch) {
+            const parentBlock = parentBlockMatch[1];
+            const parentGroupIdMatch = parentBlock.match(/<groupId>([^<]+)<\/groupId>/);
+            const parentArtifactIdMatch = parentBlock.match(/<artifactId>([^<]+)<\/artifactId>/);
+            const parentVersionMatch = parentBlock.match(/<version>([^<]+)<\/version>/);
+            
+            parentGroupId = parentGroupIdMatch ? parentGroupIdMatch[1] : null;
+            parentArtifactId = parentArtifactIdMatch ? parentArtifactIdMatch[1] : null;
+            parentVersion = parentVersionMatch ? parentVersionMatch[1] : null;
+            
+            // Remove parent block to avoid picking up parent's artifactId/groupId
+            contentWithoutParent = content.replace(/<parent>[\s\S]*?<\/parent>/, '');
+        }
+        
+        // Extract project's own groupId, artifactId, version (after removing parent block)
+        const groupIdMatch = contentWithoutParent.match(/<groupId>([^<]+)<\/groupId>/);
+        const groupId = groupIdMatch ? groupIdMatch[1] : null;
+        
+        const artifactIdMatch = contentWithoutParent.match(/<artifactId>([^<]+)<\/artifactId>/);
+        const artifactId = artifactIdMatch ? artifactIdMatch[1] : null;
+        
+        const versionMatch = contentWithoutParent.match(/<version>([^<]+)<\/version>/);
+        const version = versionMatch ? versionMatch[1] : null;
+        
+        // Check if this is a parent POM (has packaging=pom)
+        const packagingMatch = content.match(/<packaging>([^<]+)<\/packaging>/);
+        const isParentPom = packagingMatch && packagingMatch[1] === 'pom';
+        
+        // Extract dependencies
+        const dependencies = [];
+        const dependenciesBlockMatch = content.match(/<dependencies>([\s\S]*?)<\/dependencies>/);
+        
+        if (dependenciesBlockMatch) {
+            const dependenciesBlock = dependenciesBlockMatch[1];
+            // Match individual <dependency> blocks
+            const dependencyMatches = dependenciesBlock.matchAll(/<dependency>([\s\S]*?)<\/dependency>/g);
+            
+            for (const depMatch of dependencyMatches) {
+                const depBlock = depMatch[1];
+                const depGroupIdMatch = depBlock.match(/<groupId>([^<]+)<\/groupId>/);
+                const depArtifactIdMatch = depBlock.match(/<artifactId>([^<]+)<\/artifactId>/);
+                
+                if (depGroupIdMatch && depArtifactIdMatch) {
+                    dependencies.push({
+                        groupId: depGroupIdMatch[1],
+                        artifactId: depArtifactIdMatch[1]
+                    });
+                }
+            }
+        }
+        
+        return {
+            groupId,
+            artifactId,
+            version,
+            parent: parentArtifactId ? {
+                groupId: parentGroupId,
+                artifactId: parentArtifactId,
+                version: parentVersion
+            } : null,
+            isParentPom,
+            dependencies
+        };
+    } catch (error) {
+        console.error(`Failed to parse pom.xml at ${pomPath}:`, error.message);
+        return null;
+    }
+}
+
+// Sort projects based on parent-child dependencies (topological sort)
+function sortProjectsByDependencies(projectDirs) {
+    const projectInfo = new Map();
+    const parentPomProjects = new Set();
+    
+    // First pass: collect all project information
+    for (const dir of projectDirs) {
+        const pomPath = path.join(dir, 'pom.xml');
+        const pomData = parsePomFile(pomPath);
+        if (pomData) {
+            projectInfo.set(dir, pomData);
+            if (pomData.isParentPom) {
+                parentPomProjects.add(pomData.artifactId);
+            }
+        }
+    }
+    
+    // Build dependency graph
+    const graph = new Map(); // dir -> [dependent dirs]
+    const inDegree = new Map(); // dir -> count of dependencies
+    
+    for (const dir of projectDirs) {
+        graph.set(dir, []);
+        inDegree.set(dir, 0);
+    }
+    
+    // Create edges: if project A depends on B (parent or dependency), add edge B -> A
+    for (const [dir, info] of projectInfo) {
+        // Handle parent dependencies
+        if (info.parent && info.parent.artifactId) {
+            // Find the parent project directory
+            for (const [parentDir, parentInfo] of projectInfo) {
+                if (parentInfo.artifactId === info.parent.artifactId) {
+                    graph.get(parentDir).push(dir);
+                    inDegree.set(dir, inDegree.get(dir) + 1);
+                    break;
+                }
+            }
+        }
+        
+        // Handle regular dependencies
+        if (info.dependencies && info.dependencies.length > 0) {
+            for (const dep of info.dependencies) {
+                // Find the dependency in our project list
+                for (const [depDir, depInfo] of projectInfo) {
+                    if (depInfo.artifactId === dep.artifactId && 
+                        (depInfo.groupId === dep.groupId || !depInfo.groupId)) {
+                        // Avoid duplicate edges
+                        if (!graph.get(depDir).includes(dir)) {
+                            graph.get(depDir).push(dir);
+                            inDegree.set(dir, inDegree.get(dir) + 1);
+                        }
+                        break;
+                    }
+                }
+            }
+        }
+    }
+    
+    // Topological sort using Kahn's algorithm
+    const sorted = [];
+    const queue = [];
+    
+    // Start with nodes that have no dependencies
+    for (const [dir, degree] of inDegree) {
+        if (degree === 0) {
+            queue.push(dir);
+        }
+    }
+    
+    while (queue.length > 0) {
+        const current = queue.shift();
+        sorted.push(current);
+        
+        // Reduce in-degree for dependent projects
+        for (const dependent of graph.get(current)) {
+            inDegree.set(dependent, inDegree.get(dependent) - 1);
+            if (inDegree.get(dependent) === 0) {
+                queue.push(dependent);
+            }
+        }
+    }
+    
+    // Check for cycles
+    if (sorted.length !== projectDirs.length) {
+        const unsorted = projectDirs.filter(dir => !sorted.includes(dir));
+        console.warn('\n⚠️  Warning: Circular dependency detected or some projects could not be sorted.');
+        console.warn('Projects involved in circular dependency:');
+        
+        for (const dir of unsorted) {
+            const info = projectInfo.get(dir);
+            const dirName = path.basename(dir);
+            
+            if (info) {
+                let depInfo = `  - ${dirName} (${info.artifactId})`;
+                const deps = [];
+                
+                if (info.parent) {
+                    deps.push(`parent: ${info.parent.artifactId}`);
+                }
+                
+                if (info.dependencies && info.dependencies.length > 0) {
+                    // Only show dependencies that are in our project list
+                    const localDeps = info.dependencies.filter(dep => 
+                        Array.from(projectInfo.values()).some(pi => 
+                            pi.artifactId === dep.artifactId && 
+                            (pi.groupId === dep.groupId || !pi.groupId)
+                        )
+                    );
+                    if (localDeps.length > 0) {
+                        deps.push(`depends on: ${localDeps.map(d => d.artifactId).join(', ')}`);
+                    }
+                }
+                
+                if (deps.length > 0) {
+                    console.warn(`${depInfo} [${deps.join('; ')}]`);
+                } else {
+                    console.warn(depInfo);
+                }
+            } else {
+                console.warn(`  - ${dirName}`);
+            }
+        }
+        
+        console.warn('Using original directory order for these projects.\n');
+        return projectDirs;
+    }
+    
+    return sorted;
+}
 
 let mavenCmd = null;
 // Return 'mvn' by default; return 'mvnd' only when explicitly requested
@@ -439,7 +658,23 @@ if (import.meta.main) {
             if (stat.isDirectory()) {
                 // List all subdirectories
                 const entries = await fs.readdir(arg, { withFileTypes: true });
-                directories = entries.filter(e => e.isDirectory()).map(e => path.join(arg, e.name));
+                const allSubdirs = entries.filter(e => e.isDirectory()).map(e => path.join(arg, e.name));
+                
+                // Filter to only Maven projects (those with pom.xml)
+                directories = allSubdirs.filter(dir => isMavenProject(dir));
+                
+                if (directories.length === 0) {
+                    console.error(`No Maven projects found in directory: ${arg}`);
+                    process.exit(1);
+                }
+                
+                console.log(`Found ${directories.length} Maven project(s) in ${arg}`);
+                
+                // Sort by dependencies if not using all-parallel mode
+                if (!allParallel) {
+                    console.log('Analyzing pom.xml files to determine build order...');
+                    directories = sortProjectsByDependencies(directories);
+                }
             } else {
                 console.error("Invalid input. Please provide a valid JSON array, use --file <jsonfile>, or pass a directory containing projects.");
                 printUsage();
