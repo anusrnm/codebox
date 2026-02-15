@@ -153,6 +153,7 @@ function sortProjectsByDependencies(projectDirs) {
     }
     
     // Topological sort using Kahn's algorithm
+    // Modified to group projects that can be built in parallel
     const sorted = [];
     const queue = [];
     
@@ -164,20 +165,34 @@ function sortProjectsByDependencies(projectDirs) {
     }
     
     while (queue.length > 0) {
-        const current = queue.shift();
-        sorted.push(current);
+        // Process all projects in the current level in parallel
+        const currentLevel = [...queue];
+        queue.length = 0; // Clear the queue
         
-        // Reduce in-degree for dependent projects
-        for (const dependent of graph.get(current)) {
-            inDegree.set(dependent, inDegree.get(dependent) - 1);
-            if (inDegree.get(dependent) === 0) {
-                queue.push(dependent);
+        // Add current level as a parallel group if more than one project, otherwise add as single project
+        if (currentLevel.length > 1) {
+            sorted.push(currentLevel);
+        } else if (currentLevel.length === 1) {
+            sorted.push(currentLevel[0]);
+        }
+        
+        // Reduce in-degree for all dependent projects
+        for (const current of currentLevel) {
+            for (const dependent of graph.get(current)) {
+                inDegree.set(dependent, inDegree.get(dependent) - 1);
+                if (inDegree.get(dependent) === 0) {
+                    queue.push(dependent);
+                }
             }
         }
     }
     
-    // Check for cycles
-    if (sorted.length !== projectDirs.length) {
+    // Check for cycles - need to count total projects including those in parallel groups
+    const sortedCount = sorted.reduce((count, item) => {
+        return count + (Array.isArray(item) ? item.length : 1);
+    }, 0);
+    
+    if (sortedCount !== projectDirs.length) {
         const unsorted = projectDirs.filter(dir => !sorted.includes(dir));
         console.warn('\n⚠️  Warning: Circular dependency detected or some projects could not be sorted.');
         console.warn('Projects involved in circular dependency:');
@@ -324,13 +339,159 @@ async function buildInOrder(projects, quiet = false) {
         console.log("");
     }
 
-    printProjectList(projects);
     const SUCCESS = '\u2705'; // ✅
     const FAILURE = '\u274C'; // ❌
     const INTERRUPTED = '\uD83D\uDED1'; // 🛑
     const DRY_RUN = '\uD83D\uDD22'; // 🔥
     const BUILDING = '\uD83D\uDD27'; // 🔧
+    const PENDING = '\u23F3'; // ⏳
+    const SPINNER = ['⠋','⠙','⠹','⠸','⠼','⠴','⠦','⠧','⠇','⠏'];
 
+    // Flatten projects to create status display
+    function flattenProjects(arr) {
+        return arr.reduce((acc, item) => {
+            if (Array.isArray(item)) {
+                acc.push(...flattenProjects(item));
+            } else {
+                acc.push(item);
+            }
+            return acc;
+        }, []);
+    }
+    
+    const allProjects = flattenProjects(projects);
+    const projectStatus = new Map(); // dir -> {status, symbol, duration, warnings, errors, startLine}
+    
+    // Initialize all projects as pending
+    allProjects.forEach(dir => {
+        projectStatus.set(dir, {
+            status: 'pending',
+            symbol: PENDING,
+            duration: null,
+            warnings: null,
+            errors: null,
+            startLine: null
+        });
+    });
+    
+    // Display manager for GUI-like output
+    let displayEnabled = !quiet;
+    let displayStartLine = 0;
+    let spinnerIndex = 0;
+    let displayInterval = null;
+    let displayInitialized = false;
+    
+    function initDisplay() {
+        if (!displayEnabled || displayInitialized) return;
+        displayInitialized = true;
+        
+        console.log('\n' + '═'.repeat(80));
+        console.log('Build Status Dashboard');
+        console.log('═'.repeat(80));
+        
+        // Print all projects with initial status
+        allProjects.forEach((dir, idx) => {
+            const shortName = path.basename(dir);
+            console.log(`${PENDING} ${shortName.padEnd(40)} [Pending]`);
+        });
+        
+        console.log('═'.repeat(80) + '\n');
+        
+        // Save cursor position - we'll update relative to start
+        displayStartLine = 0;
+        
+        // Start spinner animation
+        displayInterval = setInterval(updateDisplay, 100);
+    }
+    
+    function updateDisplay() {
+        if (!displayEnabled || !displayInitialized) return;
+        
+        // Move cursor up to first project line (past empty line + footer + all project lines)
+        const linesToMoveUp = allProjects.length + 2;
+        process.stdout.write(`\x1b[${linesToMoveUp}A`);
+        
+        // Update each project line
+        allProjects.forEach((dir, idx) => {
+            const status = projectStatus.get(dir);
+            const shortName = path.basename(dir);
+            
+            let statusText = '';
+            let symbol = status.symbol;
+            
+            if (status.status === 'building') {
+                symbol = SPINNER[spinnerIndex % SPINNER.length];
+                statusText = '[Building...]';
+            } else if (status.status === 'pending') {
+                statusText = '[Pending]';
+            } else if (status.status === 'success') {
+                const durationStr = status.duration ? ` (${formatProjectDuration(status.duration)})` : '';
+                const warnStr = status.warnings !== null ? ` W:${status.warnings}` : '';
+                const errStr = status.errors !== null ? ` E:${status.errors}` : '';
+                statusText = `[Success${durationStr}${warnStr}${errStr}]`;
+            } else if (status.status === 'failure') {
+                const durationStr = status.duration ? ` (${formatProjectDuration(status.duration)})` : '';
+                statusText = `[Failed${durationStr}]`;
+            } else if (status.status === 'dryrun') {
+                statusText = '[Dry Run]';
+            }
+            
+            const lineContent = `${symbol} ${shortName.padEnd(40)} ${statusText}`;
+            // Clear line, write content, move to next line
+            process.stdout.write(`\x1b[2K\r${lineContent}\n`);
+        });
+        
+        // Now cursor is at footer line, move it back to original position (after empty line)
+        process.stdout.write(`\x1b[2B`);
+        
+        spinnerIndex++;
+    }
+    
+    function formatProjectDuration(ms) {
+        if (!ms) return '';
+        const s = Math.floor(ms / 1000);
+        const m = Math.floor(s / 60);
+        const sec = s % 60;
+        return m > 0 ? `${m}m ${sec}s` : `${sec}s`;
+    }
+    
+    function cleanupDisplay() {
+        if (displayInterval) {
+            clearInterval(displayInterval);
+            displayInterval = null;
+        }
+        if (displayEnabled && displayInitialized) {
+            // Do one final update to show final status
+            spinnerIndex = 0; // Reset spinner for final display
+            updateDisplay();
+            // Cursor is already positioned after the dashboard, just add a newline
+            console.log('');
+        }
+    }
+    
+    function updateProjectStatus(dir, status, details = {}) {
+        if (!projectStatus.has(dir)) return;
+        
+        const current = projectStatus.get(dir);
+        projectStatus.set(dir, {
+            ...current,
+            status,
+            symbol: details.symbol || current.symbol,
+            duration: details.duration !== undefined ? details.duration : current.duration,
+            warnings: details.warnings !== undefined ? details.warnings : current.warnings,
+            errors: details.errors !== undefined ? details.errors : current.errors
+        });
+        
+        if (displayEnabled) {
+            updateDisplay();
+        }
+    }
+
+    if (!quiet) {
+        initDisplay();
+    } else {
+        printProjectList(projects);
+    }
     
     const startTime = performance.now();
     const summary = [];
@@ -374,26 +535,14 @@ async function buildInOrder(projects, quiet = false) {
     function handleInterrupt() {
         if (!interrupted) {
             interrupted = true;
+            cleanupDisplay();
             console.log(`\n${INTERRUPTED} Build interrupted. Printing summary so far:`);
             printSummary();
             process.exit(130);
         }
     }
 
-
-
-    // Flatten the projects array to count total projects and for all-parallel mode
-    function flattenProjects(arr) {
-        return arr.reduce((acc, item) => {
-            if (Array.isArray(item)) {
-                acc.push(...flattenProjects(item));
-            } else {
-                acc.push(item);
-            }
-            return acc;
-        }, []);
-    }
-    const totalProjects = flattenProjects(projects).length;
+    const totalProjects = allProjects.length;
     let inProgressCount = 0;
 
     // Support for all-parallel mode
@@ -407,78 +556,32 @@ async function buildInOrder(projects, quiet = false) {
         const { EventEmitter } = await import('events');
         const localEmitter = new EventEmitter();
         localEmitter.setMaxListeners(20); // Increase if needed
-        // Only use spinner for serial builds (not parallel)
-        const spinnerFrames = ['⠋','⠙','⠹','⠸','⠼','⠴','⠦','⠧','⠇','⠏'];
-        let spinnerIndex = 0;
-        let spinnerInterval = null;
-        let spinnerText = '';
-        // Detect if this is a parallel build by checking buildProject.isParallel
-        const isParallel = buildProject.isParallel === true;
-        function startSpinner(text) {
-            spinnerText = text;
-            spinnerInterval = setInterval(() => {
-                process.stdout.write(`\x1b[2K\r${spinnerFrames[spinnerIndex]} ${spinnerText} [${inProgressCount}/${totalProjects}]`);
-                spinnerIndex = (spinnerIndex + 1) % spinnerFrames.length;
-            }, 80);
-        }
-        function stopSpinner(finalText) {
-            if (spinnerInterval) clearInterval(spinnerInterval);
-            process.stdout.write(`\x1b[2K\r${finalText} [${inProgressCount}/${totalProjects}]\n`);
-        }
+        
         if (!quiet) {
-            function handleStart(evt) {
-                inProgressCount++;
-                if (isParallel) {
-                    process.stdout.write(`${BUILDING} ${evt.dir} with ${evt.cmd} [${inProgressCount}/${totalProjects}]\n`);
-                } else {
-                    startSpinner(`${evt.dir} with ${evt.cmd}`);
-                }
-            }
-
-            function handleDryRun(evt) {
-                if (isParallel) {
-                    process.stdout.write(`${DRY_RUN} Would run: ${evt.cmd} in ${evt.dir} [${inProgressCount}/${totalProjects}]\n`);
-                } else {
-                    stopSpinner(`${DRY_RUN} Would run: ${evt.cmd} in ${evt.dir}`);
-                }
-            }
-
-            function getLogFileUrl(dir) {
-                if (quiet || dryRun) return null;
-                const logFile = path.join(logDir, sanitizeFilename(dir) + '.txt');
-                const logFilePath = path.resolve(logFile);
-                if (process.platform === 'win32') {
-                    return 'file:///' + logFilePath.replace(/\\/g, '/');
-                } else {
-                    return 'file://' + logFilePath;
-                }
-            }
-
-            function handleResult(evt) {
-                const symbol = evt.type === 'success' ? SUCCESS : FAILURE;
-                const logFileUrl = getLogFileUrl(evt.dir);
-                if (isParallel) {
-                    process.stdout.write(`${symbol} ${evt.dir} [${inProgressCount}/${totalProjects}]`);
-                    if (logFileUrl) process.stdout.write(` (log: ${logFileUrl})`);
-                    process.stdout.write(`\n`);
-                } else {
-                    let msg = `${symbol} ${evt.dir}`;
-                    if (logFileUrl) msg += ` (log: ${logFileUrl})`;
-                    stopSpinner(msg);
-                }
-            }
-
             localEmitter.on('progress', (evt) => {
                 switch (evt.type) {
                     case 'start':
-                        handleStart(evt);
+                        inProgressCount++;
+                        updateProjectStatus(evt.dir, 'building', { symbol: BUILDING });
                         break;
                     case 'dryrun':
-                        handleDryRun(evt);
+                        updateProjectStatus(evt.dir, 'dryrun', { symbol: DRY_RUN });
                         break;
                     case 'success':
+                        updateProjectStatus(evt.dir, 'success', {
+                            symbol: SUCCESS,
+                            duration: evt.duration,
+                            warnings: evt.warnings,
+                            errors: evt.errors
+                        });
+                        break;
                     case 'failure':
-                        handleResult(evt);
+                        updateProjectStatus(evt.dir, 'failure', {
+                            symbol: FAILURE,
+                            duration: evt.duration,
+                            warnings: evt.warnings,
+                            errors: evt.errors
+                        });
                         break;
                     default:
                         break;
@@ -548,7 +651,8 @@ async function buildInOrder(projects, quiet = false) {
     }
 
     const duration = performance.now() - startTime;
-    console.log(`Completed in ${formatDuration(duration)}`);
+    cleanupDisplay();
+    console.log(`\nCompleted in ${formatDuration(duration)}`);
     printSummary();
 }
 
