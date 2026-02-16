@@ -89,13 +89,49 @@ function getSpinner() {
   return `${colors.yellow}${spinners[spinnerIndex]}${colors.reset}`;
 }
 
+// Global state for interruption handling
+let currentDownloadState = null;
+
+function displayPartialDownloadSummary() {
+  if (!currentDownloadState) return;
+  
+  const state = currentDownloadState;
+  const now = performance.now();
+  const elapsed = (now - state.startTime) / 1000;
+  const speed = ((state.bytesReceived * 8) / elapsed / 1_000_000).toFixed(2);
+  
+  clearLine();
+  console.log(`\n\n${colors.yellow}⚠${colors.reset}  ${colors.bright}Download Interrupted${colors.reset}\n`);
+  console.log(`${colors.blue}ℹ${colors.reset} ${colors.dim}Partial Results:${colors.reset}`);
+  console.log(`   ${colors.cyan}Downloaded:${colors.reset}       ${formatBytes(state.bytesReceived)}`);
+  if (state.totalBytes > 0) {
+    const percentage = ((state.bytesReceived / state.totalBytes) * 100).toFixed(1);
+    console.log(`   ${colors.cyan}Total Size:${colors.reset}          ${formatBytes(state.totalBytes)} (${percentage}%)`);
+  }
+  console.log(`   ${colors.cyan}Elapsed Time:${colors.reset}       ${elapsed.toFixed(2)}s`);
+  console.log(`   ${colors.cyan}Average Speed:${colors.reset}      ${speed} Mbps`);
+  console.log(`   ${colors.cyan}URL:${colors.reset}                ${state.url}\n`);
+}
+
 // Network Speed Test in Mbps
 async function networkSpeedTest(testUrl, testName = 'Download', timeoutMs = 60000) {
   return new Promise((resolve, reject) => {
     const startTime = performance.now();
     let bytesReceived = 0;
     let totalBytes = 0;
+    let isInterrupted = false;
     const protocol = testUrl.startsWith('https') ? https : http;
+    
+    // Setup interrupt handler for this download
+    const handleInterrupt = () => {
+      isInterrupted = true;
+      currentDownloadState = { startTime, bytesReceived, totalBytes, url: testUrl };
+      request.destroy();
+      reject(new Error('INTERRUPTED'));
+    };
+    
+    const sigintHandler = handleInterrupt;
+    const sigtermHandler = handleInterrupt;
 
     printHeader(`${testName} Speed Test`);
     printInfo('URL', testUrl);
@@ -115,52 +151,90 @@ async function networkSpeedTest(testUrl, testName = 'Download', timeoutMs = 6000
       }
 
       totalBytes = parseInt(res.headers['content-length']) || 0;
-      let lastUpdate = Date.now();
-      let lastBytes = 0;
       let lastOutput = '';
       let progressInterval;
 
+      // Rolling speed window for smooth speed display (like npm/Node.js CLIs)
+      const SPEED_WINDOW_SIZE = 10; // number of samples to average
+      const speedSamples = [];      // { time, bytes } snapshots
+      let displayedPercentage = 0;  // for smooth interpolation
+
+      function pushSpeedSample() {
+        speedSamples.push({ time: performance.now(), bytes: bytesReceived });
+        if (speedSamples.length > SPEED_WINDOW_SIZE) speedSamples.shift();
+      }
+      // Seed the first sample
+      pushSpeedSample();
+
+      function getRollingSpeed() {
+        if (speedSamples.length < 2) return 0;
+        const oldest = speedSamples[0];
+        const newest = speedSamples[speedSamples.length - 1];
+        const dt = (newest.time - oldest.time) / 1000; // seconds
+        if (dt === 0) return 0;
+        return ((newest.bytes - oldest.bytes) * 8) / dt / 1_000_000; // Mbps
+      }
+
+      function getETA() {
+        if (totalBytes <= 0) return '';
+        const speed = getRollingSpeed(); // Mbps
+        if (speed <= 0) return 'calculating…';
+        const remainingBytes = totalBytes - bytesReceived;
+        const remainingBits = remainingBytes * 8;
+        const remainingSec = remainingBits / (speed * 1_000_000);
+        if (remainingSec < 60) return `${Math.ceil(remainingSec)}s`;
+        if (remainingSec < 3600) return `${Math.floor(remainingSec / 60)}m ${Math.ceil(remainingSec % 60)}s`;
+        return `${Math.floor(remainingSec / 3600)}h ${Math.floor((remainingSec % 3600) / 60)}m`;
+      }
+
       // Update progress bar
       const updateProgress = () => {
-        // Only update if there's been significant progress
-        const byteDiff = bytesReceived - lastBytes;
-        if (byteDiff === 0 && bytesReceived > 0) {
-          return;
-        }
-        lastBytes = bytesReceived;
-        
+        pushSpeedSample();
+
         const elapsed = (performance.now() - startTime) / 1000;
-        const currentSpeed = (bytesReceived * 8 / elapsed / 1_000_000).toFixed(2);
-        const percentage = totalBytes > 0 ? (bytesReceived / totalBytes) * 100 : 0;
-        
+        const rollingSpeed = getRollingSpeed().toFixed(2);
+        const actualPercentage = totalBytes > 0 ? (bytesReceived / totalBytes) * 100 : 0;
+
+        // Smoothly interpolate displayed percentage toward actual (easing)
+        const ease = 0.35;
+        displayedPercentage += (actualPercentage - displayedPercentage) * ease;
+        // Snap when very close to avoid lingering decimals
+        if (Math.abs(actualPercentage - displayedPercentage) < 0.3) {
+          displayedPercentage = actualPercentage;
+        }
+        const percentage = displayedPercentage;
+
+        const eta = getETA();
+        const etaStr = eta ? ` | ETA ${colors.yellow}${eta}${colors.reset}` : '';
+
         let output = '';
         if (process.stdout.isTTY) {
-          // Calculate available width for progress bar
           const termWidth = process.stdout.columns || 80;
-          const staticText = `${getSpinner()} Downloading:  100.0% | 99.99 MB/99.99 MB | 999.99 Mbps`;
-          const availableWidth = Math.max(10, Math.min(30, termWidth - staticText.length));
-          
+          // Reserve space for the text parts to size the bar dynamically
+          const sampleText = `X Downloading:  100.0% | 99.99 MB/99.99 MB | 999.99 Mbps | ETA 59m 59s`;
+          const availableWidth = Math.max(10, Math.min(30, termWidth - sampleText.length));
+
           if (totalBytes > 0) {
             const bar = createProgressBar(percentage, availableWidth);
-            output = `${getSpinner()} Downloading: ${bar} ${percentage.toFixed(1)}% | ${formatBytes(bytesReceived)}/${formatBytes(totalBytes)} | ${colors.cyan}${currentSpeed} Mbps${colors.reset}`;
+            output = `${getSpinner()} Downloading: ${bar} ${percentage.toFixed(1)}% | ${formatBytes(bytesReceived)}/${formatBytes(totalBytes)} | ${colors.cyan}${rollingSpeed} Mbps${colors.reset}${etaStr}`;
           } else {
-            output = `${getSpinner()} Downloading: ${formatBytes(bytesReceived)} | ${colors.cyan}${currentSpeed} Mbps${colors.reset}`;
+            output = `${getSpinner()} Downloading: ${formatBytes(bytesReceived)} | ${colors.cyan}${rollingSpeed} Mbps${colors.reset}`;
           }
-          
-          // Truncate if still too long
-          const outputLength = output.replace(/\x1b\[[0-9;]*m/g, '').length; // Strip ANSI codes for length calculation
+
+          // Truncate fallback
+          const outputLength = output.replace(/\x1b\[[0-9;]*m/g, '').length;
           if (outputLength > termWidth - 1) {
-            output = `${getSpinner()} Downloading: ${percentage.toFixed(1)}% | ${formatBytes(bytesReceived)} | ${colors.cyan}${currentSpeed} Mbps${colors.reset}`;
+            output = `${getSpinner()} Downloading: ${percentage.toFixed(1)}% | ${formatBytes(bytesReceived)} | ${colors.cyan}${rollingSpeed} Mbps${colors.reset}${etaStr}`;
           }
         } else {
           if (totalBytes > 0) {
             const bar = createProgressBar(percentage, 30);
-            output = `${getSpinner()} Downloading: ${bar} ${percentage.toFixed(1)}% | ${formatBytes(bytesReceived)}/${formatBytes(totalBytes)} | ${colors.cyan}${currentSpeed} Mbps${colors.reset}`;
+            output = `${getSpinner()} Downloading: ${bar} ${percentage.toFixed(1)}% | ${formatBytes(bytesReceived)}/${formatBytes(totalBytes)} | ${colors.cyan}${rollingSpeed} Mbps${colors.reset}${etaStr}`;
           } else {
-            output = `${getSpinner()} Downloading: ${formatBytes(bytesReceived)} | ${colors.cyan}${currentSpeed} Mbps${colors.reset}`;
+            output = `${getSpinner()} Downloading: ${formatBytes(bytesReceived)} | ${colors.cyan}${rollingSpeed} Mbps${colors.reset}`;
           }
         }
-        
+
         // Only redraw if output changed
         if (output !== lastOutput && process.stdout.isTTY) {
           clearLine();
@@ -169,8 +243,8 @@ async function networkSpeedTest(testUrl, testName = 'Download', timeoutMs = 6000
         }
       };
 
-      // Start progress animation with slower updates to prevent flicker
-      progressInterval = setInterval(updateProgress, 500);
+      // Render at ~100ms for smooth animation (npm-style throttled rendering)
+      progressInterval = setInterval(updateProgress, 100);
 
       res.on('data', (chunk) => {
         bytesReceived += chunk.length;
@@ -179,6 +253,8 @@ async function networkSpeedTest(testUrl, testName = 'Download', timeoutMs = 6000
       res.on('end', () => {
         clearInterval(progressInterval);
         clearLine();
+        process.removeListener('SIGINT', sigintHandler);
+        process.removeListener('SIGTERM', sigtermHandler);
         
         const endTime = performance.now();
         const durationMs = endTime - startTime;
@@ -212,16 +288,31 @@ async function networkSpeedTest(testUrl, testName = 'Download', timeoutMs = 6000
 
       res.on('error', (err) => {
         clearInterval(progressInterval);
+        process.removeListener('SIGINT', sigintHandler);
+        process.removeListener('SIGTERM', sigtermHandler);
         reject(err);
       });
     });
 
     request.on('error', (err) => {
-      reject(new Error(`Network error: ${err.message}`));
+      clearInterval(progressInterval ?? 0);
+      process.removeListener('SIGINT', sigintHandler);
+      process.removeListener('SIGTERM', sigtermHandler);
+      if (err.code === 'ERR_HTTP_REQUEST_TIMEOUT') {
+        reject(new Error(`Request timeout after ${timeoutMs / 1000}s`));
+      } else {
+        reject(new Error(`Network error: ${err.message}`));
+      }
     });
+    
+    // Register interrupt handlers for this download
+    process.on('SIGINT', sigintHandler);
+    process.on('SIGTERM', sigtermHandler);
     
     request.setTimeout(timeoutMs, () => {
       request.destroy();
+      process.removeListener('SIGINT', sigintHandler);
+      process.removeListener('SIGTERM', sigtermHandler);
       reject(new Error(`Request timeout after ${timeoutMs / 1000}s`));
     });
   });
@@ -666,6 +757,10 @@ async function comprehensiveNetworkTest(url) {
         success = true;
         break; // Stop after first successful test
       } catch (error) {
+        // Re-throw interruption errors immediately without trying next URL
+        if (error.message === 'INTERRUPTED') {
+          throw error;
+        }
         printError(`${test.name} failed: ${error.message}`);
         if (testUrls.indexOf(test) < testUrls.length - 1) {
           printInfo('Status', 'Trying next test URL...');
@@ -682,6 +777,12 @@ async function comprehensiveNetworkTest(url) {
       console.log(`   ${colors.dim}• Network connectivity issues${colors.reset}`);
     }
   } catch (error) {
-    printError(`Test failed: ${error.message}`);
+    // Check if this was an interruption
+    if (error.message === 'INTERRUPTED') {
+      displayPartialDownloadSummary();
+      process.exit(130); // Standard exit code for SIGINT
+    } else {
+      printError(`Test failed: ${error.message}`);
+    }
   }
 })();
