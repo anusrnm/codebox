@@ -146,7 +146,7 @@ func init() {
 		"Pretty print JSON messages")
 	flag.BoolVar(&config.ShowStats, "stats", true,
 		"Show periodic statistics")
-	flag.DurationVar(&config.StatsInterval, "stats-interval", 10*time.Second,
+	flag.DurationVar(&config.StatsInterval, "stats-interval", 1*time.Second,
 		"Statistics display interval")
 	flag.StringVar(&config.ExcludeFields, "exclude-fields", "content,activeContent,historyFull,historyDelta,cfLrecs",
 		"Comma-separated list of JSON fields to exclude from output")
@@ -313,11 +313,14 @@ func main() {
 
 	select {
 	case <-sigC:
+		fmt.Println()
 		logWarning("Shutdown signal received. Closing subscriber...")
 	case <-ctx.Done():
 		if config.MaxMessages > 0 && atomic.LoadInt64(&stats.MessagesReceived) >= config.MaxMessages {
+			fmt.Println()
 			logSuccess("Reached maximum message count (%d)", config.MaxMessages)
 		} else if config.Duration > 0 {
+			fmt.Println()
 			logSuccess("Duration limit reached")
 		}
 	}
@@ -622,40 +625,53 @@ func printBanner() {
 }
 
 func printStatsPeriodically(ctx context.Context) {
-	ticker := time.NewTicker(config.StatsInterval)
-	defer ticker.Stop()
+	// Spin the spinner at 80ms for a smooth animation; refresh data at the configured interval.
+	const spinInterval = 80 * time.Millisecond
+	spinTicker := time.NewTicker(spinInterval)
+	defer spinTicker.Stop()
 
 	spinChars := []string{"⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"}
 	spinIdx := 0
+
+	// Cached stats values so we don't re-read atomics every 80ms
+	var received, bytes, compressed, errors int64
+	var elapsed time.Duration
+	var rate float64
+	lastDataRefresh := time.Time{}
 
 	for {
 		select {
 		case <-ctx.Done():
 			return
-		case <-ticker.C:
-			received := atomic.LoadInt64(&stats.MessagesReceived)
-			bytes := atomic.LoadInt64(&stats.BytesReceived)
-			compressed := atomic.LoadInt64(&stats.CompressedMessages)
-			errors := atomic.LoadInt64(&stats.Errors)
-			elapsed := time.Since(stats.StartTime).Round(time.Second)
-
-			rate := float64(0)
-			if elapsed.Seconds() > 0 {
-				rate = float64(received) / elapsed.Seconds()
+		case <-spinTicker.C:
+			// Refresh data at the configured stats interval
+			if time.Since(lastDataRefresh) >= config.StatsInterval {
+				received = atomic.LoadInt64(&stats.MessagesReceived)
+				bytes = atomic.LoadInt64(&stats.BytesReceived)
+				compressed = atomic.LoadInt64(&stats.CompressedMessages)
+				errors = atomic.LoadInt64(&stats.Errors)
+				elapsed = time.Since(stats.StartTime).Round(100 * time.Millisecond)
+				rate = 0
+				if elapsed.Seconds() > 0 {
+					rate = float64(received) / elapsed.Seconds()
+				}
+				lastDataRefresh = time.Now()
 			}
 
-			// Progress indicator
+			// Always update elapsed for a live clock feel
+			elapsed = time.Since(stats.StartTime).Round(100 * time.Millisecond)
+
 			spin := spinChars[spinIdx%len(spinChars)]
 			spinIdx++
 
-			fmt.Printf("\r%s%s %s[Stats]%s Msgs: %s%d%s | Rate: %s%.1f/s%s | Bytes: %s%s%s | Compressed: %s%d%s | Errors: %s%d%s | Elapsed: %s%v%s    ",
+			fmt.Printf("\r%s%s %s[Stats]%s Msgs: %s%d%s | Rate: %s%.1f/s%s | Bytes: %s%s%s | Compressed: %s%d%s | Errors: %s%d%s | Elapsed: %s%s%s    ",
 				colorCyan, spin, colorBold, colorReset,
 				colorGreen, received, colorReset,
 				colorBlue, rate, colorReset,
 				colorPurple, formatBytes(bytes), colorReset,
 				colorYellow, compressed, colorReset,
 				colorRed, errors, colorReset,
-				colorGray, elapsed, colorReset,
+				colorGray, formatElapsed(elapsed), colorReset,
 			)
 
 			// Show progress toward max messages if set
@@ -691,7 +707,7 @@ func printFinalStats() {
 	fmt.Printf("  %s%-25s%s %s%d%s\n", colorBold, "Compressed Messages:", colorReset, colorYellow, compressed, colorReset)
 	fmt.Printf("  %s%-25s%s %s%d%s\n", colorBold, "Errors:", colorReset, colorRed, errors, colorReset)
 	fmt.Printf("  %s%-25s%s %s%.2f msg/sec%s\n", colorBold, "Average Rate:", colorReset, colorBlue, rate, colorReset)
-	fmt.Printf("  %s%-25s%s %s%v%s\n", colorBold, "Total Duration:", colorReset, colorGray, elapsed, colorReset)
+	fmt.Printf("  %s%-25s%s %s%s%s\n", colorBold, "Total Duration:", colorReset, colorGray, formatElapsed(elapsed), colorReset)
 	fmt.Printf("  %s%-25s%s %s%s%s\n", colorBold, "Output File:", colorReset, colorCyan, config.OutputFile, colorReset)
 	fmt.Println()
 }
@@ -713,6 +729,10 @@ func formatBytes(bytes int64) string {
 	default:
 		return fmt.Sprintf("%d B", bytes)
 	}
+}
+
+func formatElapsed(elapsed time.Duration) string {
+	return fmt.Sprintf("%.1fs", elapsed.Seconds())
 }
 
 func logInfo(format string, args ...interface{}) {
