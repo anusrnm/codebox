@@ -1,0 +1,1165 @@
+<!doctype html>
+
+  <!--
+    Review Tracker (local standalone utility)
+
+    Purpose
+    - Track large `git diff --name-status` review lists with compact click-to-move workflow.
+
+    Input
+    - Paste diff output or upload a text file.
+    - Expected line shape: "A|M|D<TAB or spaces>path" (other lines are still accepted as plain entries).
+
+    Interaction
+    - Click an item in left pane to move it to right pane (done).
+    - Click an item in right pane to move it back to left pane.
+    - Add/Edit note on any item via Alt+Click or Right-Click.
+    - Hover an item to view its note in tooltip.
+
+    Visual coding
+    - A (Added): green marker.
+    - M (Modified): amber marker.
+    - D (Deleted): red marker.
+    - Dot indicator means the entry has a note.
+
+    Persistence
+    - State is auto-saved to browser localStorage key: reviewTracker.v2.
+    - Stored fields: source text/signature, pending list, done list, notes, updated timestamp.
+
+    Sharing
+    - Export writes current tracker state to JSON.
+    - Import restores state from JSON and persists it immediately.
+  -->
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Review Tracker</title>
+  <style>
+    :root {
+      --bg: #f6f8fb;
+      --fg: #2b3440;
+      --muted: #6c7785;
+      --border: #c9d3df;
+      --accent: #2f81f7;
+      --row-hover: color-mix(in oklab, var(--accent) 18%, var(--bg));
+      --done-row: color-mix(in oklab, #2ea043 18%, var(--bg));
+      --a-color: #2ea043;
+      --m-color: #d29922;
+      --d-color: #cf222e;
+    }
+
+    :root[data-theme="dark"] {
+      color-scheme: dark;
+      --bg: #1d2430;
+      --fg: #d7dee7;
+      --muted: #a6b0bc;
+      --border: #3c4657;
+      --accent: #79b3ff;
+      --done-row: color-mix(in oklab, #2ea043 20%, var(--bg));
+    }
+
+    :root[data-theme="light"] {
+      color-scheme: light;
+      --bg: #f6f8fb;
+      --fg: #2b3440;
+      --muted: #6c7785;
+      --border: #c9d3df;
+      --accent: #2b7de9;
+      --done-row: color-mix(in oklab, #2ea043 14%, var(--bg));
+    }
+
+    * { box-sizing: border-box; }
+
+    html, body {
+      margin: 0;
+      padding: 0;
+      width: 100%;
+      height: 100%;
+      background: var(--bg);
+      color: var(--fg);
+      font-family: system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
+      font-size: 12px;
+      line-height: 1.2;
+    }
+
+    body {
+      display: grid;
+      grid-template-rows: auto auto 1fr;
+      gap: 6px;
+      padding: 6px;
+    }
+
+    .meta-filter-row {
+      display: grid;
+      grid-template-columns: 1fr minmax(320px, 520px);
+      gap: 8px;
+      align-items: center;
+      min-height: 26px;
+    }
+
+    .toolbar {
+      display: grid;
+      grid-template-columns: 1fr auto auto auto auto auto auto auto auto;
+      gap: 4px;
+      align-items: center;
+      min-height: 28px;
+    }
+
+    .toolbar input[type="file"] {
+      width: 240px;
+      max-width: 100%;
+    }
+
+    textarea {
+      width: 100%;
+      min-height: 72px;
+      max-height: 140px;
+      resize: vertical;
+      border: 1px solid var(--border);
+      background: var(--bg);
+      color: var(--fg);
+      padding: 4px 6px;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-size: 11px;
+      line-height: 1.3;
+    }
+
+    button {
+      height: 28px;
+      padding: 0 8px;
+      border: 1px solid var(--border);
+      background: var(--bg);
+      color: var(--fg);
+      cursor: pointer;
+      white-space: nowrap;
+      border-radius: 4px;
+      font-size: 11px;
+    }
+
+    button:hover { border-color: var(--accent); }
+    button:disabled { opacity: 0.55; cursor: default; }
+
+    .meta {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      min-height: 20px;
+      color: var(--fg);
+      font-size: 12px;
+      font-weight: 500;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .filterbar {
+      display: flex;
+      gap: 6px;
+      align-items: center;
+      min-height: 24px;
+      justify-content: flex-end;
+    }
+
+    .filterbar label {
+      color: var(--fg);
+      font-size: 12px;
+      font-weight: 500;
+      white-space: nowrap;
+    }
+
+    .filterbar input[type="search"] {
+      width: 100%;
+      max-width: 520px;
+      height: 26px;
+      border: 1px solid var(--border);
+      background: var(--bg);
+      color: var(--fg);
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-size: 12px;
+    }
+
+    .theme-toggle {
+      width: 28px;
+      height: 26px;
+      padding: 0;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 14px;
+      line-height: 1;
+    }
+
+    .help-toggle {
+      width: 28px;
+      height: 26px;
+      padding: 0;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 13px;
+      line-height: 1;
+    }
+
+    .modal-backdrop {
+      position: fixed;
+      inset: 0;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      background: color-mix(in oklab, var(--bg) 35%, black);
+      z-index: 1000;
+      padding: 12px;
+    }
+
+    .modal-backdrop.open {
+      display: flex;
+    }
+
+    .modal {
+      width: min(560px, 100%);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: var(--bg);
+      color: var(--fg);
+      box-shadow: 0 8px 24px color-mix(in oklab, black 40%, transparent);
+      overflow: hidden;
+    }
+
+    .modal-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 10px 12px;
+      border-bottom: 1px solid var(--border);
+      font-size: 13px;
+      font-weight: 600;
+    }
+
+    .modal-close {
+      width: 28px;
+      height: 24px;
+      padding: 0;
+      font-size: 14px;
+      line-height: 1;
+    }
+
+    .modal-body {
+      padding: 10px 12px;
+      font-size: 12px;
+      line-height: 1.45;
+    }
+
+    .shortcut-grid {
+      width: 100%;
+      border-collapse: collapse;
+    }
+
+    .shortcut-grid td {
+      border-bottom: 1px solid color-mix(in oklab, var(--border) 70%, transparent);
+      padding: 6px 4px;
+      vertical-align: top;
+    }
+
+    .shortcut-grid td:first-child {
+      width: 38%;
+      color: var(--muted);
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      white-space: nowrap;
+    }
+
+    .lists {
+      min-height: 0;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 6px;
+    }
+
+    .pane {
+      border: 1px solid var(--border);
+      min-height: 0;
+      overflow: auto;
+    }
+
+    ul {
+      margin: 0;
+      padding: 0;
+      list-style: none;
+    }
+
+    li {
+      border-bottom: 1px solid color-mix(in oklab, var(--border) 70%, transparent);
+      padding: 3px 8px;
+      cursor: pointer;
+      user-select: none;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-size: 11px;
+      line-height: 1.25;
+      position: relative;
+      border-left: 3px solid transparent;
+    }
+
+    #pendingList li:hover { background: var(--row-hover); }
+    #doneList li { background: color-mix(in oklab, var(--done-row) 40%, transparent); }
+    #doneList li:hover { background: var(--done-row); }
+
+    li.status-a { border-left-color: var(--a-color); }
+    li.status-m { border-left-color: var(--m-color); }
+    li.status-d { border-left-color: var(--d-color); }
+
+    li.has-note::after {
+      content: "•";
+      position: absolute;
+      right: 6px;
+      top: 2px;
+      color: var(--accent);
+      font-size: 10px;
+      line-height: 1;
+    }
+
+    li.is-selected {
+      outline: 1px solid var(--accent);
+      outline-offset: -1px;
+      background: color-mix(in oklab, var(--accent) 16%, var(--bg));
+    }
+
+    #doneList li.is-selected {
+      background: color-mix(in oklab, var(--accent) 12%, var(--done-row));
+    }
+
+    .empty {
+      color: var(--muted);
+      padding: 6px;
+      font-size: 11px;
+    }
+  </style>
+</head>
+<body>
+  <div class="toolbar">
+    <textarea id="sourceInput" placeholder="Paste diff lines (e.g. M\tpath/to/file)"></textarea>
+    <input id="sourceFile" type="file" accept=".txt,.diff,.patch,text/plain" />
+    <button id="loadBtn" type="button">Load</button>
+    <button id="saveBtn" type="button">Save</button>
+    <button id="resetBtn" type="button">Reset</button>
+    <button id="clearBtn" type="button">Clear</button>
+    <button id="copyDoneBtn" type="button">Copy Done</button>
+    <button id="exportBtn" type="button">Export</button>
+    <button id="importBtn" type="button">Import</button>
+    <input id="importFile" type="file" accept="application/json,.json" hidden />
+  </div>
+
+  <div class="meta-filter-row">
+    <div class="meta" id="meta"></div>
+    <div class="filterbar">
+      <label for="searchInput">Search notes</label>
+      <input id="searchInput" type="search" placeholder="Type text and use @A @M @D to filter status" />
+      <button id="helpToggleBtn" class="help-toggle" type="button" title="Shortcuts (?)">?</button>
+      <button id="themeToggleBtn" class="theme-toggle" type="button" title="Toggle theme (t)">🌙</button>
+    </div>
+  </div>
+
+  <div class="lists">
+    <div class="pane"><ul id="pendingList"></ul></div>
+    <div class="pane"><ul id="doneList"></ul></div>
+  </div>
+
+  <div id="shortcutModal" class="modal-backdrop" aria-hidden="true">
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="shortcutModalTitle">
+      <div class="modal-header">
+        <span id="shortcutModalTitle">Shortcut Legends</span>
+        <button id="closeShortcutModalBtn" class="modal-close" type="button" aria-label="Close">✕</button>
+      </div>
+      <div class="modal-body">
+        <table class="shortcut-grid">
+          <tr><td>j or ←</td><td>Switch to left list (pending)</td></tr>
+          <tr><td>l or →</td><td>Switch to right list (done)</td></tr>
+          <tr><td>i or ↑</td><td>Move selection up (auto-scroll)</td></tr>
+          <tr><td>k or ↓</td><td>Move selection down (auto-scroll)</td></tr>
+          <tr><td>Enter</td><td>Move selected item between pending and done</td></tr>
+          <tr><td>n</td><td>View/Edit note for selected item</td></tr>
+          <tr><td>t</td><td>Toggle theme</td></tr>
+          <tr><td>?</td><td>Open this shortcut legend modal</td></tr>
+          <tr><td>Esc</td><td>Close this modal</td></tr>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    (() => {
+      const STORAGE_KEY = "reviewTracker.v2";
+      const THEME_KEY = "reviewTracker.theme.v1";
+
+      const sourceInput = document.getElementById("sourceInput");
+      const sourceFile = document.getElementById("sourceFile");
+      const loadBtn = document.getElementById("loadBtn");
+      const saveBtn = document.getElementById("saveBtn");
+      const resetBtn = document.getElementById("resetBtn");
+      const clearBtn = document.getElementById("clearBtn");
+      const copyDoneBtn = document.getElementById("copyDoneBtn");
+      const exportBtn = document.getElementById("exportBtn");
+      const importBtn = document.getElementById("importBtn");
+      const importFile = document.getElementById("importFile");
+      const pendingList = document.getElementById("pendingList");
+      const doneList = document.getElementById("doneList");
+      const meta = document.getElementById("meta");
+      const searchInput = document.getElementById("searchInput");
+      const helpToggleBtn = document.getElementById("helpToggleBtn");
+      const themeToggleBtn = document.getElementById("themeToggleBtn");
+      const shortcutModal = document.getElementById("shortcutModal");
+      const closeShortcutModalBtn = document.getElementById("closeShortcutModalBtn");
+
+      let filterQuery = "";
+      let textFilter = "";
+      let statusFilterTokens = [];
+      let activePane = "pending";
+      let selectedItemByPane = {
+        pending: "",
+        done: ""
+      };
+      let theme = "light";
+
+      let state = {
+        sourceSignature: "",
+        sourceText: "",
+        pending: [],
+        done: [],
+        notes: {},
+        updatedAt: 0
+      };
+
+      function getEntryStatus(line) {
+        const token = (line.split(/\s+/, 1)[0] || "").trim().toUpperCase();
+        const status = token.charAt(0);
+        return status === "A" || status === "M" || status === "D" ? status : "";
+      }
+
+      function getNote(item) {
+        return (state.notes && state.notes[item]) || "";
+      }
+
+      function setNote(item, noteText) {
+        if (!state.notes) {
+          state.notes = {};
+        }
+        const cleaned = (noteText || "").trim();
+        if (!cleaned) {
+          delete state.notes[item];
+          return;
+        }
+        state.notes[item] = cleaned;
+      }
+
+      function filterNotes(validItems) {
+        const validSet = new Set(validItems);
+        const filtered = {};
+        for (const [key, val] of Object.entries(state.notes || {})) {
+          if (validSet.has(key) && String(val).trim()) {
+            filtered[key] = String(val).trim();
+          }
+        }
+        return filtered;
+      }
+
+      function parseLines(rawText) {
+        const seen = new Set();
+        const lines = rawText
+          .split(/\r?\n/)
+          .map(line => line.trim())
+          .filter(Boolean)
+          .filter(line => {
+            if (seen.has(line)) {
+              return false;
+            }
+            seen.add(line);
+            return true;
+          });
+        return lines;
+      }
+
+      function quickHash(text) {
+        let hash = 5381;
+        for (let i = 0; i < text.length; i++) {
+          hash = ((hash << 5) + hash) ^ text.charCodeAt(i);
+        }
+        return (hash >>> 0).toString(16);
+      }
+
+      function getSignature(text) {
+        return `${text.length}:${quickHash(text)}`;
+      }
+
+      function saveState() {
+        state.updatedAt = Date.now();
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+        updateMeta();
+      }
+
+      function applyTheme(nextTheme) {
+        theme = nextTheme === "dark" ? "dark" : "light";
+        document.documentElement.setAttribute("data-theme", theme);
+        themeToggleBtn.textContent = theme === "dark" ? "☀" : "🌙";
+        themeToggleBtn.title = `Toggle theme (t) | current: ${theme}`;
+      }
+
+      function toggleTheme() {
+        applyTheme(theme === "dark" ? "light" : "dark");
+        localStorage.setItem(THEME_KEY, theme);
+      }
+
+      function initTheme() {
+        const saved = localStorage.getItem(THEME_KEY);
+        if (saved === "light" || saved === "dark") {
+          applyTheme(saved);
+          return;
+        }
+        const prefersDark = window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches;
+        applyTheme(prefersDark ? "dark" : "light");
+      }
+
+      function openShortcutModal() {
+        shortcutModal.classList.add("open");
+        shortcutModal.setAttribute("aria-hidden", "false");
+      }
+
+      function closeShortcutModal() {
+        shortcutModal.classList.remove("open");
+        shortcutModal.setAttribute("aria-hidden", "true");
+      }
+
+      function isShortcutModalOpen() {
+        return shortcutModal.classList.contains("open");
+      }
+
+      function makeExportPayload() {
+        return {
+          version: 1,
+          exportedAt: Date.now(),
+          sourceSignature: state.sourceSignature,
+          sourceText: state.sourceText,
+          pending: [...state.pending],
+          done: [...state.done],
+          notes: { ...(state.notes || {}) },
+          updatedAt: state.updatedAt || Date.now()
+        };
+      }
+
+      function exportStateToFile() {
+        const payload = makeExportPayload();
+        const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
+        const url = URL.createObjectURL(blob);
+        const anchor = document.createElement("a");
+        const stamp = new Date().toISOString().replace(/[:.]/g, "-");
+        anchor.href = url;
+        anchor.download = `review-tracker-state-${stamp}.json`;
+        document.body.appendChild(anchor);
+        anchor.click();
+        anchor.remove();
+        URL.revokeObjectURL(url);
+      }
+
+      function normalizeImportedState(parsed) {
+        if (!parsed || typeof parsed !== "object") {
+          return null;
+        }
+        const pending = Array.isArray(parsed.pending) ? parsed.pending.map(String) : [];
+        const done = Array.isArray(parsed.done) ? parsed.done.map(String) : [];
+        const all = [...pending, ...done];
+        const uniqueAll = [];
+        const seen = new Set();
+        for (const item of all) {
+          const trimmed = item.trim();
+          if (!trimmed || seen.has(trimmed)) {
+            continue;
+          }
+          seen.add(trimmed);
+          uniqueAll.push(trimmed);
+        }
+
+        const pendingClean = pending.map(x => x.trim()).filter(x => seen.has(x));
+        const pendingSet = new Set(pendingClean);
+        const doneClean = uniqueAll.filter(x => !pendingSet.has(x));
+
+        const notes = {};
+        const rawNotes = parsed.notes && typeof parsed.notes === "object" ? parsed.notes : {};
+        const valid = new Set(uniqueAll);
+        for (const [key, val] of Object.entries(rawNotes)) {
+          const k = String(key).trim();
+          const v = String(val || "").trim();
+          if (k && v && valid.has(k)) {
+            notes[k] = v;
+          }
+        }
+
+        const sourceText = typeof parsed.sourceText === "string" ? parsed.sourceText : uniqueAll.join("\n");
+        const sourceSignature = typeof parsed.sourceSignature === "string" && parsed.sourceSignature
+          ? parsed.sourceSignature
+          : getSignature(sourceText);
+
+        return {
+          sourceSignature,
+          sourceText,
+          pending: pendingClean,
+          done: doneClean,
+          notes,
+          updatedAt: Number(parsed.updatedAt || Date.now())
+        };
+      }
+
+      function applyImportedState(parsed) {
+        const normalized = normalizeImportedState(parsed);
+        if (!normalized) {
+          render("invalid import");
+          return;
+        }
+        state = normalized;
+        sourceInput.value = state.sourceText;
+        saveState();
+        render("imported");
+      }
+
+      function loadStateFromStorage() {
+        const raw = localStorage.getItem(STORAGE_KEY);
+        if (!raw) {
+          return false;
+        }
+        try {
+          const parsed = JSON.parse(raw);
+          if (!parsed || typeof parsed !== "object") {
+            return false;
+          }
+          state = {
+            sourceSignature: parsed.sourceSignature || "",
+            sourceText: parsed.sourceText || "",
+            pending: Array.isArray(parsed.pending) ? parsed.pending : [],
+            done: Array.isArray(parsed.done) ? parsed.done : [],
+            notes: parsed.notes && typeof parsed.notes === "object" ? parsed.notes : {},
+            updatedAt: Number(parsed.updatedAt || 0)
+          };
+          sourceInput.value = state.sourceText;
+          return true;
+        } catch {
+          return false;
+        }
+      }
+
+      function clearState() {
+        state = {
+          sourceSignature: "",
+          sourceText: "",
+          pending: [],
+          done: [],
+          notes: {},
+          updatedAt: 0
+        };
+        sourceInput.value = "";
+        sourceFile.value = "";
+        localStorage.removeItem(STORAGE_KEY);
+      }
+
+      function updateMeta(message) {
+        const pendingCount = state.pending.length;
+        const doneCount = state.done.length;
+        const total = pendingCount + doneCount;
+        const pct = total === 0 ? 0 : Math.round((doneCount / total) * 100);
+        const when = state.updatedAt ? new Date(state.updatedAt).toLocaleString() : "-";
+        const statusPart = statusFilterTokens.length ? ` | type: ${statusFilterTokens.join("/")}` : "";
+        const filterPart = filterQuery ? ` | filter: ${filterQuery}` : "";
+        meta.textContent = `${pendingCount} left | ${doneCount} done | ${pct}% | saved ${when}${message ? ` | ${message}` : ""}${filterPart}${statusPart} | alt/right-click item to note`;
+      }
+
+      function parseFilterQuery(rawQuery) {
+        const raw = String(rawQuery || "").trim();
+        if (!raw) {
+          return { text: "", statuses: [] };
+        }
+
+        const statuses = new Set();
+        const words = raw.split(/\s+/).filter(Boolean);
+        const textParts = [];
+
+        for (const word of words) {
+          const token = word.toUpperCase();
+          if (/^@[AMD]$/.test(token)) {
+            statuses.add(token.slice(1));
+            continue;
+          }
+          textParts.push(word);
+        }
+
+        return {
+          text: textParts.join(" ").trim(),
+          statuses: Array.from(statuses)
+        };
+      }
+
+      function matchesTextFilter(item) {
+        if (!textFilter) {
+          return true;
+        }
+        const needle = textFilter.toLowerCase();
+        const inItem = item.toLowerCase().includes(needle);
+        if (inItem) {
+          return true;
+        }
+        const note = getNote(item);
+        return note.toLowerCase().includes(needle);
+      }
+
+      function matchesStatusFilter(item) {
+        if (statusFilterTokens.length === 0) {
+          return true;
+        }
+        const status = getEntryStatus(item);
+        return statusFilterTokens.includes(status);
+      }
+
+      function matchesFilter(item) {
+        return matchesStatusFilter(item) && matchesTextFilter(item);
+      }
+
+      function getVisibleItems(kind) {
+        const source = kind === "pending" ? state.pending : state.done;
+        return source.filter(matchesFilter);
+      }
+
+      function ensureSelection(kind) {
+        const visible = getVisibleItems(kind);
+        if (visible.length === 0) {
+          selectedItemByPane[kind] = "";
+          return;
+        }
+        if (!selectedItemByPane[kind] || !visible.includes(selectedItemByPane[kind])) {
+          selectedItemByPane[kind] = visible[0];
+        }
+      }
+
+      function setActivePane(kind) {
+        activePane = kind === "done" ? "done" : "pending";
+        ensureSelection(activePane);
+      }
+
+      function scrollSelectionIntoView(kind = activePane) {
+        const listEl = kind === "done" ? doneList : pendingList;
+        const selected = listEl.querySelector("li.is-selected");
+        if (selected) {
+          selected.scrollIntoView({ block: "nearest" });
+        }
+      }
+
+      function refreshSelectionClasses(kind) {
+        const listEl = kind === "done" ? doneList : pendingList;
+        const selectedValue = kind === "done" ? selectedItemByPane.done : selectedItemByPane.pending;
+        for (const li of listEl.querySelectorAll("li[data-value]")) {
+          li.classList.toggle("is-selected", li.dataset.value === selectedValue);
+        }
+      }
+
+      function navigateSelection(direction) {
+        ensureSelection(activePane);
+        const visible = getVisibleItems(activePane);
+        if (visible.length === 0) {
+          return;
+        }
+        const current = selectedItemByPane[activePane];
+        const currentIndex = Math.max(0, visible.indexOf(current));
+        const nextIndex = Math.min(visible.length - 1, Math.max(0, currentIndex + direction));
+        selectedItemByPane[activePane] = visible[nextIndex];
+      }
+
+      function buildList(listEl, items, kind) {
+        listEl.textContent = "";
+        const visibleItems = items.filter(matchesFilter);
+        if (visibleItems.length === 0) {
+          const li = document.createElement("li");
+          li.className = "empty";
+          if (items.length === 0) {
+            li.textContent = kind === "pending" ? "all done" : "none";
+          } else {
+            li.textContent = "no matches";
+          }
+          li.style.cursor = "default";
+          listEl.appendChild(li);
+          return;
+        }
+
+        const fragment = document.createDocumentFragment();
+        for (const item of visibleItems) {
+          const li = document.createElement("li");
+          li.textContent = item;
+          const note = getNote(item);
+          li.title = note ? `${item}\n\nNote: ${note}` : item;
+          li.dataset.value = item;
+          const status = getEntryStatus(item);
+          if (status) {
+            li.classList.add(`status-${status.toLowerCase()}`);
+          }
+          if (note) {
+            li.classList.add("has-note");
+          }
+          if (selectedItemByPane[kind] === item) {
+            li.classList.add("is-selected");
+          }
+          fragment.appendChild(li);
+        }
+        listEl.appendChild(fragment);
+      }
+
+      function render(message) {
+        ensureSelection("pending");
+        ensureSelection("done");
+        buildList(pendingList, state.pending, "pending");
+        buildList(doneList, state.done, "done");
+        updateMeta(message);
+      }
+
+      function loadFromInput() {
+        const rawText = sourceInput.value || "";
+        const lines = parseLines(rawText);
+        const previousNotes = state.notes || {};
+        state.sourceText = rawText;
+        state.sourceSignature = getSignature(rawText);
+        state.pending = lines;
+        state.done = [];
+        state.notes = {};
+        for (const line of lines) {
+          if (previousNotes[line]) {
+            state.notes[line] = String(previousNotes[line]).trim();
+          }
+        }
+        saveState();
+        render();
+      }
+
+      function editNote(item) {
+        const current = getNote(item);
+        const result = window.prompt("Note", current);
+        if (result === null) {
+          return;
+        }
+        setNote(item, result);
+        saveState();
+        render(result.trim() ? "note saved" : "note cleared");
+      }
+
+      function moveItem(value, from, to) {
+        const idx = from.indexOf(value);
+        if (idx < 0) {
+          return;
+        }
+        from.splice(idx, 1);
+        to.push(value);
+        saveState();
+        render();
+      }
+
+      function moveSelectedToDone() {
+        ensureSelection("pending");
+        const value = selectedItemByPane.pending;
+        if (!value) {
+          return;
+        }
+        activePane = "done";
+        selectedItemByPane.done = value;
+        moveItem(value, state.pending, state.done);
+        scrollSelectionIntoView("done");
+      }
+
+      function moveSelectedToPending() {
+        ensureSelection("done");
+        const value = selectedItemByPane.done;
+        if (!value) {
+          return;
+        }
+        activePane = "pending";
+        selectedItemByPane.pending = value;
+        moveItem(value, state.done, state.pending);
+        scrollSelectionIntoView("pending");
+      }
+
+      function moveSelectedByActivePane() {
+        if (activePane === "pending") {
+          moveSelectedToDone();
+          return;
+        }
+        moveSelectedToPending();
+      }
+
+      function getSelectedValue(kind = activePane) {
+        ensureSelection(kind);
+        return kind === "done" ? selectedItemByPane.done : selectedItemByPane.pending;
+      }
+
+      function editSelectedNote() {
+        const value = getSelectedValue(activePane);
+        if (!value) {
+          return;
+        }
+        editNote(value);
+      }
+
+      function bindListEvents() {
+        pendingList.addEventListener("click", (event) => {
+          const li = event.target.closest("li[data-value]");
+          if (!li) {
+            return;
+          }
+          if (event.altKey) {
+            editNote(li.dataset.value);
+            return;
+          }
+          setActivePane("pending");
+          selectedItemByPane.pending = li.dataset.value;
+          refreshSelectionClasses("pending");
+          refreshSelectionClasses("done");
+        });
+
+        pendingList.addEventListener("dblclick", (event) => {
+          const li = event.target.closest("li[data-value]");
+          if (!li) {
+            return;
+          }
+          if (event.altKey) {
+            editNote(li.dataset.value);
+            return;
+          }
+          selectedItemByPane.pending = li.dataset.value;
+          activePane = "done";
+          selectedItemByPane.done = li.dataset.value;
+          moveItem(li.dataset.value, state.pending, state.done);
+          scrollSelectionIntoView("done");
+        });
+
+        doneList.addEventListener("click", (event) => {
+          const li = event.target.closest("li[data-value]");
+          if (!li) {
+            return;
+          }
+          if (event.altKey) {
+            editNote(li.dataset.value);
+            return;
+          }
+          setActivePane("done");
+          selectedItemByPane.done = li.dataset.value;
+          refreshSelectionClasses("done");
+          refreshSelectionClasses("pending");
+        });
+
+        doneList.addEventListener("dblclick", (event) => {
+          const li = event.target.closest("li[data-value]");
+          if (!li) {
+            return;
+          }
+          if (event.altKey) {
+            editNote(li.dataset.value);
+            return;
+          }
+          selectedItemByPane.done = li.dataset.value;
+          activePane = "pending";
+          selectedItemByPane.pending = li.dataset.value;
+          moveItem(li.dataset.value, state.done, state.pending);
+          scrollSelectionIntoView("pending");
+        });
+
+        const onContextNote = (event) => {
+          const li = event.target.closest("li[data-value]");
+          if (!li) {
+            return;
+          }
+          event.preventDefault();
+          editNote(li.dataset.value);
+        };
+
+        pendingList.addEventListener("contextmenu", onContextNote);
+        doneList.addEventListener("contextmenu", onContextNote);
+
+        document.addEventListener("keydown", (event) => {
+          const target = event.target;
+          if (target && target.closest("input, textarea, button, select")) {
+            return;
+          }
+
+          const key = String(event.key || "").toLowerCase();
+          if (key === "escape" && isShortcutModalOpen()) {
+            event.preventDefault();
+            closeShortcutModal();
+            return;
+          }
+          if (isShortcutModalOpen()) {
+            return;
+          }
+          if (key === "j" || key === "arrowleft") {
+            event.preventDefault();
+            setActivePane("pending");
+            render();
+            scrollSelectionIntoView("pending");
+            return;
+          }
+          if (key === "l" || key === "arrowright") {
+            event.preventDefault();
+            setActivePane("done");
+            render();
+            scrollSelectionIntoView("done");
+            return;
+          }
+          if (key === "i" || key === "arrowup") {
+            event.preventDefault();
+            navigateSelection(-1);
+            render();
+            scrollSelectionIntoView(activePane);
+            return;
+          }
+          if (key === "k" || key === "arrowdown") {
+            event.preventDefault();
+            navigateSelection(1);
+            render();
+            scrollSelectionIntoView(activePane);
+            return;
+          }
+          if (key === "enter") {
+            event.preventDefault();
+            moveSelectedByActivePane();
+            return;
+          }
+          if (key === "n") {
+            event.preventDefault();
+            editSelectedNote();
+            return;
+          }
+          if (key === "t") {
+            event.preventDefault();
+            toggleTheme();
+            return;
+          }
+          if (key === "?") {
+            event.preventDefault();
+            openShortcutModal();
+          }
+        });
+      }
+
+      function bindControls() {
+        loadBtn.addEventListener("click", loadFromInput);
+
+        saveBtn.addEventListener("click", () => {
+          saveState();
+          render("saved");
+        });
+
+        resetBtn.addEventListener("click", () => {
+          const base = parseLines(state.sourceText || sourceInput.value || "");
+          state.pending = base;
+          state.done = [];
+          state.notes = filterNotes(base);
+          saveState();
+          render("reset");
+        });
+
+        clearBtn.addEventListener("click", () => {
+          clearState();
+          render("cleared");
+        });
+
+        copyDoneBtn.addEventListener("click", async () => {
+          const text = state.done.join("\n");
+          if (!text) {
+            render("no done items");
+            return;
+          }
+          try {
+            await navigator.clipboard.writeText(text);
+            render("copied done");
+          } catch {
+            render("copy failed");
+          }
+        });
+
+        exportBtn.addEventListener("click", () => {
+          exportStateToFile();
+          render("exported");
+        });
+
+        importBtn.addEventListener("click", () => {
+          importFile.click();
+        });
+
+        importFile.addEventListener("change", () => {
+          const file = importFile.files && importFile.files[0];
+          if (!file) {
+            return;
+          }
+          const reader = new FileReader();
+          reader.onload = () => {
+            try {
+              const text = typeof reader.result === "string" ? reader.result : "";
+              const parsed = JSON.parse(text);
+              applyImportedState(parsed);
+            } catch {
+              render("import failed");
+            }
+          };
+          reader.readAsText(file);
+          importFile.value = "";
+        });
+
+        sourceFile.addEventListener("change", () => {
+          const file = sourceFile.files && sourceFile.files[0];
+          if (!file) {
+            return;
+          }
+          const reader = new FileReader();
+          reader.onload = () => {
+            sourceInput.value = typeof reader.result === "string" ? reader.result : "";
+            loadFromInput();
+          };
+          reader.readAsText(file);
+        });
+
+        searchInput.addEventListener("input", () => {
+          filterQuery = (searchInput.value || "").trim();
+          const parsed = parseFilterQuery(filterQuery);
+          textFilter = parsed.text;
+          statusFilterTokens = parsed.statuses;
+          render();
+        });
+
+        themeToggleBtn.addEventListener("click", () => {
+          toggleTheme();
+        });
+
+        helpToggleBtn.addEventListener("click", () => {
+          openShortcutModal();
+        });
+
+        closeShortcutModalBtn.addEventListener("click", () => {
+          closeShortcutModal();
+        });
+
+        shortcutModal.addEventListener("click", (event) => {
+          if (event.target === shortcutModal) {
+            closeShortcutModal();
+          }
+        });
+      }
+
+      function init() {
+        initTheme();
+        bindListEvents();
+        bindControls();
+
+        if (loadStateFromStorage()) {
+          render("restored");
+        } else {
+          render();
+        }
+      }
+
+      init();
+    })();
+  </script>
+</body>
+</html>
