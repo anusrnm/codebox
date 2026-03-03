@@ -47,6 +47,10 @@
       --a-color: #2ea043;
       --m-color: #d29922;
       --d-color: #cf222e;
+      --c-color: #1f6feb;
+      --r-color: #8250df;
+      --t-color: #9a6700;
+      --u-color: #bf3989;
     }
 
     :root[data-theme="dark"] {
@@ -57,6 +61,10 @@
       --border: #3c4657;
       --accent: #79b3ff;
       --done-row: color-mix(in oklab, #2ea043 20%, var(--bg));
+      --c-color: #79b3ff;
+      --r-color: #b392f0;
+      --t-color: #e3b341;
+      --u-color: #d2a8ff;
     }
 
     :root[data-theme="light"] {
@@ -67,6 +75,10 @@
       --border: #c9d3df;
       --accent: #2b7de9;
       --done-row: color-mix(in oklab, #2ea043 14%, var(--bg));
+      --c-color: #2b7de9;
+      --r-color: #8250df;
+      --t-color: #9a6700;
+      --u-color: #bf3989;
     }
 
     * { box-sizing: border-box; }
@@ -100,7 +112,7 @@
 
     .toolbar {
       display: grid;
-      grid-template-columns: 1fr auto auto auto auto auto auto auto auto;
+      grid-template-columns: 1fr auto auto auto auto auto auto auto;
       gap: 4px;
       align-items: center;
       min-height: 28px;
@@ -279,6 +291,49 @@
     .pane {
       border: 1px solid var(--border);
       min-height: 0;
+      display: grid;
+      grid-template-rows: auto 1fr;
+    }
+
+    .pane-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 6px;
+      min-height: 28px;
+      padding: 2px 6px;
+      border-bottom: 1px solid var(--border);
+      color: var(--muted);
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: 0.02em;
+    }
+
+    .pane-title {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .pane-selected-count {
+      color: var(--accent);
+      font-weight: 600;
+      font-size: 10px;
+      letter-spacing: 0;
+    }
+
+    .pane-copy {
+      width: 24px;
+      height: 22px;
+      padding: 0;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 12px;
+      line-height: 1;
+    }
+
+    .pane-list {
       overflow: auto;
     }
 
@@ -310,6 +365,10 @@
     li.status-a { border-left-color: var(--a-color); }
     li.status-m { border-left-color: var(--m-color); }
     li.status-d { border-left-color: var(--d-color); }
+    li.status-c { border-left-color: var(--c-color); }
+    li.status-r { border-left-color: var(--r-color); }
+    li.status-t { border-left-color: var(--t-color); }
+    li.status-u { border-left-color: var(--u-color); }
 
     li.has-note::after {
       content: "•";
@@ -346,7 +405,6 @@
     <button id="saveBtn" type="button">Save</button>
     <button id="resetBtn" type="button">Reset</button>
     <button id="clearBtn" type="button">Clear</button>
-    <button id="copyDoneBtn" type="button">Copy Done</button>
     <button id="exportBtn" type="button">Export</button>
     <button id="importBtn" type="button">Import</button>
     <input id="importFile" type="file" accept="application/json,.json" hidden />
@@ -356,15 +414,27 @@
     <div class="meta" id="meta"></div>
     <div class="filterbar">
       <label for="searchInput">Search notes</label>
-      <input id="searchInput" type="search" placeholder="Type text and use @A @M @D to filter status" />
+      <input id="searchInput" type="search" placeholder="Type text and use @A @M @D @C @R @T @U to filter status" />
       <button id="helpToggleBtn" class="help-toggle" type="button" title="Shortcuts (?)">?</button>
       <button id="themeToggleBtn" class="theme-toggle" type="button" title="Toggle theme (t)">🌙</button>
     </div>
   </div>
 
   <div class="lists">
-    <div class="pane"><ul id="pendingList"></ul></div>
-    <div class="pane"><ul id="doneList"></ul></div>
+    <div class="pane">
+      <div class="pane-header">
+        <span class="pane-title">Pending <span id="pendingSelectedCount" class="pane-selected-count"></span></span>
+        <button id="copyPendingBtn" class="pane-copy" type="button" title="Copy pending list">⧉</button>
+      </div>
+      <div class="pane-list"><ul id="pendingList"></ul></div>
+    </div>
+    <div class="pane">
+      <div class="pane-header">
+        <span class="pane-title">Done <span id="doneSelectedCount" class="pane-selected-count"></span></span>
+        <button id="copyDonePaneBtn" class="pane-copy" type="button" title="Copy done list">⧉</button>
+      </div>
+      <div class="pane-list"><ul id="doneList"></ul></div>
+    </div>
   </div>
 
   <div id="shortcutModal" class="modal-backdrop" aria-hidden="true">
@@ -391,8 +461,28 @@
 
   <script>
     (() => {
-      const STORAGE_KEY = "reviewTracker.v2";
-      const THEME_KEY = "reviewTracker.theme.v1";
+      const STORAGE_KEY_BASE = "reviewTracker.v2";
+      const THEME_KEY_BASE = "reviewTracker.theme.v1";
+      const SESSION_INSTANCE_KEY = "reviewTracker.sessionInstance.v1";
+
+      function resolveInstanceId() {
+        const params = new URLSearchParams(window.location.search || "");
+        const fromQuery = (params.get("instance") || "").trim();
+        if (fromQuery) {
+          return fromQuery;
+        }
+        const existing = sessionStorage.getItem(SESSION_INSTANCE_KEY);
+        if (existing) {
+          return existing;
+        }
+        const generated = `tab-${Math.random().toString(36).slice(2, 8)}`;
+        sessionStorage.setItem(SESSION_INSTANCE_KEY, generated);
+        return generated;
+      }
+
+      const INSTANCE_ID = resolveInstanceId();
+      const STORAGE_KEY = `${STORAGE_KEY_BASE}.${INSTANCE_ID}`;
+      const THEME_KEY = `${THEME_KEY_BASE}.${INSTANCE_ID}`;
 
       const sourceInput = document.getElementById("sourceInput");
       const sourceFile = document.getElementById("sourceFile");
@@ -400,7 +490,10 @@
       const saveBtn = document.getElementById("saveBtn");
       const resetBtn = document.getElementById("resetBtn");
       const clearBtn = document.getElementById("clearBtn");
-      const copyDoneBtn = document.getElementById("copyDoneBtn");
+      const copyPendingBtn = document.getElementById("copyPendingBtn");
+      const copyDonePaneBtn = document.getElementById("copyDonePaneBtn");
+      const pendingSelectedCount = document.getElementById("pendingSelectedCount");
+      const doneSelectedCount = document.getElementById("doneSelectedCount");
       const exportBtn = document.getElementById("exportBtn");
       const importBtn = document.getElementById("importBtn");
       const importFile = document.getElementById("importFile");
@@ -421,6 +514,10 @@
         pending: "",
         done: ""
       };
+      let selectedItemsByPane = {
+        pending: new Set(),
+        done: new Set()
+      };
       let theme = "light";
 
       let state = {
@@ -435,7 +532,7 @@
       function getEntryStatus(line) {
         const token = (line.split(/\s+/, 1)[0] || "").trim().toUpperCase();
         const status = token.charAt(0);
-        return status === "A" || status === "M" || status === "D" ? status : "";
+        return ["A", "M", "D", "C", "R", "T", "U"].includes(status) ? status : "";
       }
 
       function getNote(item) {
@@ -669,7 +766,7 @@
         const when = state.updatedAt ? new Date(state.updatedAt).toLocaleString() : "-";
         const statusPart = statusFilterTokens.length ? ` | type: ${statusFilterTokens.join("/")}` : "";
         const filterPart = filterQuery ? ` | filter: ${filterQuery}` : "";
-        meta.textContent = `${pendingCount} left | ${doneCount} done | ${pct}% | saved ${when}${message ? ` | ${message}` : ""}${filterPart}${statusPart} | alt/right-click item to note`;
+        meta.textContent = `${pendingCount} left | ${doneCount} done | ${pct}% | saved ${when}${message ? ` | ${message}` : ""}${filterPart}${statusPart} | instance ${INSTANCE_ID} | alt/right-click item to note`;
       }
 
       function parseFilterQuery(rawQuery) {
@@ -684,7 +781,7 @@
 
         for (const word of words) {
           const token = word.toUpperCase();
-          if (/^@[AMD]$/.test(token)) {
+          if (/^@[AMDCRTU]$/.test(token)) {
             statuses.add(token.slice(1));
             continue;
           }
@@ -731,10 +828,17 @@
         const visible = getVisibleItems(kind);
         if (visible.length === 0) {
           selectedItemByPane[kind] = "";
+          selectedItemsByPane[kind].clear();
           return;
         }
         if (!selectedItemByPane[kind] || !visible.includes(selectedItemByPane[kind])) {
           selectedItemByPane[kind] = visible[0];
+        }
+        const visibleSet = new Set(visible);
+        for (const value of [...selectedItemsByPane[kind]]) {
+          if (!visibleSet.has(value)) {
+            selectedItemsByPane[kind].delete(value);
+          }
         }
       }
 
@@ -754,9 +858,59 @@
       function refreshSelectionClasses(kind) {
         const listEl = kind === "done" ? doneList : pendingList;
         const selectedValue = kind === "done" ? selectedItemByPane.done : selectedItemByPane.pending;
+        const selectedSet = selectedItemsByPane[kind];
         for (const li of listEl.querySelectorAll("li[data-value]")) {
-          li.classList.toggle("is-selected", li.dataset.value === selectedValue);
+          const value = li.dataset.value;
+          li.classList.toggle("is-selected", value === selectedValue || selectedSet.has(value));
         }
+        updatePaneSelectionCounts();
+      }
+
+      function updatePaneSelectionCounts() {
+        const pendingVisibleSet = new Set(getVisibleItems("pending"));
+        const doneVisibleSet = new Set(getVisibleItems("done"));
+
+        const pendingCount = [...selectedItemsByPane.pending].filter(value => pendingVisibleSet.has(value)).length;
+        const doneCount = [...selectedItemsByPane.done].filter(value => doneVisibleSet.has(value)).length;
+
+        pendingSelectedCount.textContent = pendingCount > 1 ? `${pendingCount} selected` : "";
+        doneSelectedCount.textContent = doneCount > 1 ? `${doneCount} selected` : "";
+      }
+
+      function selectItem(kind, value, options = {}) {
+        const { toggle = false, range = false } = options;
+        setActivePane(kind);
+
+        const visible = getVisibleItems(kind);
+        const selectedSet = selectedItemsByPane[kind];
+        const anchor = selectedItemByPane[kind];
+
+        if (range && anchor && visible.length > 0) {
+          const from = visible.indexOf(anchor);
+          const to = visible.indexOf(value);
+          if (from >= 0 && to >= 0) {
+            const start = Math.min(from, to);
+            const end = Math.max(from, to);
+            if (!toggle) {
+              selectedSet.clear();
+            }
+            for (let i = start; i <= end; i++) {
+              selectedSet.add(visible[i]);
+            }
+          }
+        } else if (toggle) {
+          if (selectedSet.has(value)) {
+            selectedSet.delete(value);
+          } else {
+            selectedSet.add(value);
+          }
+        } else {
+          selectedSet.clear();
+          selectedSet.add(value);
+        }
+
+        selectedItemByPane[kind] = value;
+        refreshSelectionClasses(kind);
       }
 
       function navigateSelection(direction) {
@@ -814,6 +968,7 @@
         ensureSelection("done");
         buildList(pendingList, state.pending, "pending");
         buildList(doneList, state.done, "done");
+        updatePaneSelectionCounts();
         updateMeta(message);
       }
 
@@ -847,37 +1002,79 @@
       }
 
       function moveItem(value, from, to) {
-        const idx = from.indexOf(value);
-        if (idx < 0) {
+        moveItems([value], from, to);
+      }
+
+      function moveItems(values, from, to) {
+        if (!Array.isArray(values) || values.length === 0) {
           return;
         }
-        from.splice(idx, 1);
-        to.push(value);
+        const moveSet = new Set(values);
+        const moved = [];
+        for (let i = from.length - 1; i >= 0; i--) {
+          const value = from[i];
+          if (!moveSet.has(value)) {
+            continue;
+          }
+          from.splice(i, 1);
+          moved.push(value);
+        }
+        if (moved.length === 0) {
+          return;
+        }
+        moved.reverse();
+        for (const value of moved) {
+          to.push(value);
+          selectedItemsByPane.pending.delete(value);
+          selectedItemsByPane.done.delete(value);
+        }
         saveState();
         render();
       }
 
+      function getMoveCandidates(kind) {
+        ensureSelection(kind);
+        const visibleSet = new Set(getVisibleItems(kind));
+        const selected = [...selectedItemsByPane[kind]].filter(value => visibleSet.has(value));
+        if (selected.length > 0) {
+          return selected;
+        }
+        const fallback = kind === "done" ? selectedItemByPane.done : selectedItemByPane.pending;
+        return fallback ? [fallback] : [];
+      }
+
+      function setSelectionAfterMove(kind, movedValues) {
+        if (!movedValues || movedValues.length === 0) {
+          return;
+        }
+        selectedItemsByPane[kind].clear();
+        for (const value of movedValues) {
+          selectedItemsByPane[kind].add(value);
+        }
+        selectedItemByPane[kind] = movedValues[movedValues.length - 1];
+      }
+
       function moveSelectedToDone() {
-        ensureSelection("pending");
-        const value = selectedItemByPane.pending;
-        if (!value) {
+        const values = getMoveCandidates("pending");
+        if (values.length === 0) {
           return;
         }
         activePane = "done";
-        selectedItemByPane.done = value;
-        moveItem(value, state.pending, state.done);
+        moveItems(values, state.pending, state.done);
+        setSelectionAfterMove("done", values);
+        refreshSelectionClasses("done");
         scrollSelectionIntoView("done");
       }
 
       function moveSelectedToPending() {
-        ensureSelection("done");
-        const value = selectedItemByPane.done;
-        if (!value) {
+        const values = getMoveCandidates("done");
+        if (values.length === 0) {
           return;
         }
         activePane = "pending";
-        selectedItemByPane.pending = value;
-        moveItem(value, state.done, state.pending);
+        moveItems(values, state.done, state.pending);
+        setSelectionAfterMove("pending", values);
+        refreshSelectionClasses("pending");
         scrollSelectionIntoView("pending");
       }
 
@@ -894,12 +1091,33 @@
         return kind === "done" ? selectedItemByPane.done : selectedItemByPane.pending;
       }
 
+      function getSelectedValues(kind = activePane) {
+        ensureSelection(kind);
+        const visibleSet = new Set(getVisibleItems(kind));
+        const values = [...selectedItemsByPane[kind]].filter(value => visibleSet.has(value));
+        if (values.length > 0) {
+          return values;
+        }
+        const fallback = getSelectedValue(kind);
+        return fallback ? [fallback] : [];
+      }
+
       function editSelectedNote() {
-        const value = getSelectedValue(activePane);
-        if (!value) {
+        const values = getSelectedValues(activePane);
+        if (values.length === 0) {
           return;
         }
-        editNote(value);
+        const firstNote = getNote(values[0]);
+        const allSame = values.every(value => getNote(value) === firstNote);
+        const result = window.prompt("Note", allSame ? firstNote : "");
+        if (result === null) {
+          return;
+        }
+        for (const value of values) {
+          setNote(value, result);
+        }
+        saveState();
+        render(result.trim() ? `note saved (${values.length})` : `note cleared (${values.length})`);
       }
 
       function bindListEvents() {
@@ -912,9 +1130,10 @@
             editNote(li.dataset.value);
             return;
           }
-          setActivePane("pending");
-          selectedItemByPane.pending = li.dataset.value;
-          refreshSelectionClasses("pending");
+          selectItem("pending", li.dataset.value, {
+            toggle: event.ctrlKey || event.metaKey,
+            range: event.shiftKey
+          });
           refreshSelectionClasses("done");
         });
 
@@ -927,10 +1146,9 @@
             editNote(li.dataset.value);
             return;
           }
-          selectedItemByPane.pending = li.dataset.value;
+          selectItem("pending", li.dataset.value);
           activePane = "done";
-          selectedItemByPane.done = li.dataset.value;
-          moveItem(li.dataset.value, state.pending, state.done);
+          moveSelectedToDone();
           scrollSelectionIntoView("done");
         });
 
@@ -943,9 +1161,10 @@
             editNote(li.dataset.value);
             return;
           }
-          setActivePane("done");
-          selectedItemByPane.done = li.dataset.value;
-          refreshSelectionClasses("done");
+          selectItem("done", li.dataset.value, {
+            toggle: event.ctrlKey || event.metaKey,
+            range: event.shiftKey
+          });
           refreshSelectionClasses("pending");
         });
 
@@ -958,10 +1177,9 @@
             editNote(li.dataset.value);
             return;
           }
-          selectedItemByPane.done = li.dataset.value;
+          selectItem("done", li.dataset.value);
           activePane = "pending";
-          selectedItemByPane.pending = li.dataset.value;
-          moveItem(li.dataset.value, state.done, state.pending);
+          moveSelectedToPending();
           scrollSelectionIntoView("pending");
         });
 
@@ -1064,8 +1282,22 @@
           render("cleared");
         });
 
-        copyDoneBtn.addEventListener("click", async () => {
-          const text = state.done.join("\n");
+        copyPendingBtn.addEventListener("click", async () => {
+          const text = getVisibleItems("pending").join("\n");
+          if (!text) {
+            render("no pending items");
+            return;
+          }
+          try {
+            await navigator.clipboard.writeText(text);
+            render("copied pending");
+          } catch {
+            render("copy failed");
+          }
+        });
+
+        copyDonePaneBtn.addEventListener("click", async () => {
+          const text = getVisibleItems("done").join("\n");
           if (!text) {
             render("no done items");
             return;
