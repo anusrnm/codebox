@@ -322,6 +322,20 @@
       letter-spacing: 0;
     }
 
+    .copy-indicator {
+      color: var(--a-color);
+      font-size: 10px;
+      font-weight: 600;
+      letter-spacing: 0;
+      opacity: 0;
+      transition: opacity 120ms ease;
+      pointer-events: none;
+    }
+
+    .copy-indicator.show {
+      opacity: 1;
+    }
+
     .pane-copy {
       width: 24px;
       height: 22px;
@@ -414,7 +428,7 @@
     <div class="meta" id="meta"></div>
     <div class="filterbar">
       <label for="searchInput">Search notes</label>
-      <input id="searchInput" type="search" placeholder="Type text and use @A @M @D @C @R @T @U to filter status" />
+      <input id="searchInput" type="search" placeholder="Text, re:pattern, /pattern/i, and @A @M @D @C @R @T @U" />
       <button id="helpToggleBtn" class="help-toggle" type="button" title="Shortcuts (?)">?</button>
       <button id="themeToggleBtn" class="theme-toggle" type="button" title="Toggle theme (t)">🌙</button>
     </div>
@@ -423,14 +437,14 @@
   <div class="lists">
     <div class="pane">
       <div class="pane-header">
-        <span class="pane-title">Pending <span id="pendingSelectedCount" class="pane-selected-count"></span></span>
+        <span class="pane-title">Pending <span id="pendingSelectedCount" class="pane-selected-count"></span> <span id="pendingCopyIndicator" class="copy-indicator">Copied</span></span>
         <button id="copyPendingBtn" class="pane-copy" type="button" title="Copy pending list">⧉</button>
       </div>
       <div class="pane-list"><ul id="pendingList"></ul></div>
     </div>
     <div class="pane">
       <div class="pane-header">
-        <span class="pane-title">Done <span id="doneSelectedCount" class="pane-selected-count"></span></span>
+        <span class="pane-title">Done <span id="doneSelectedCount" class="pane-selected-count"></span> <span id="doneCopyIndicator" class="copy-indicator">Copied</span></span>
         <button id="copyDonePaneBtn" class="pane-copy" type="button" title="Copy done list">⧉</button>
       </div>
       <div class="pane-list"><ul id="doneList"></ul></div>
@@ -450,7 +464,10 @@
           <tr><td>i or ↑</td><td>Move selection up (auto-scroll)</td></tr>
           <tr><td>k or ↓</td><td>Move selection down (auto-scroll)</td></tr>
           <tr><td>Enter</td><td>Move selected item between pending and done</td></tr>
+          <tr><td>Ctrl/Cmd + A</td><td>Select all visible items in active list</td></tr>
+          <tr><td>Ctrl/Cmd + C</td><td>Copy selected items from active list</td></tr>
           <tr><td>n</td><td>View/Edit note for selected item</td></tr>
+          <tr><td>Regex search</td><td>Use re:pattern or /pattern/i in search</td></tr>
           <tr><td>t</td><td>Toggle theme</td></tr>
           <tr><td>?</td><td>Open this shortcut legend modal</td></tr>
           <tr><td>Esc</td><td>Close this modal</td></tr>
@@ -492,6 +509,8 @@
       const clearBtn = document.getElementById("clearBtn");
       const copyPendingBtn = document.getElementById("copyPendingBtn");
       const copyDonePaneBtn = document.getElementById("copyDonePaneBtn");
+      const pendingCopyIndicator = document.getElementById("pendingCopyIndicator");
+      const doneCopyIndicator = document.getElementById("doneCopyIndicator");
       const pendingSelectedCount = document.getElementById("pendingSelectedCount");
       const doneSelectedCount = document.getElementById("doneSelectedCount");
       const exportBtn = document.getElementById("exportBtn");
@@ -508,6 +527,9 @@
 
       let filterQuery = "";
       let textFilter = "";
+      let textFilterRegex = null;
+      let regexFilterError = "";
+      let regexMode = false;
       let statusFilterTokens = [];
       let activePane = "pending";
       let selectedItemByPane = {
@@ -518,6 +540,7 @@
         pending: new Set(),
         done: new Set()
       };
+      let copyIndicatorTimers = { pending: 0, done: 0 };
       let theme = "light";
 
       let state = {
@@ -766,35 +789,98 @@
         const when = state.updatedAt ? new Date(state.updatedAt).toLocaleString() : "-";
         const statusPart = statusFilterTokens.length ? ` | type: ${statusFilterTokens.join("/")}` : "";
         const filterPart = filterQuery ? ` | filter: ${filterQuery}` : "";
-        meta.textContent = `${pendingCount} left | ${doneCount} done | ${pct}% | saved ${when}${message ? ` | ${message}` : ""}${filterPart}${statusPart} | instance ${INSTANCE_ID} | alt/right-click item to note`;
+        const regexPart = regexMode ? (regexFilterError ? ` | regex error: ${regexFilterError}` : " | regex") : "";
+        meta.textContent = `${pendingCount} left | ${doneCount} done | ${pct}% | saved ${when}${message ? ` | ${message}` : ""}${filterPart}${statusPart}${regexPart} | instance ${INSTANCE_ID} | alt/right-click item to note`;
+      }
+
+      function globToRegexSource(globPattern) {
+        return String(globPattern || "")
+          .replace(/[.+^${}()|[\]\\]/g, "\\$&")
+          .replace(/\*/g, ".*")
+          .replace(/\?/g, ".");
+      }
+
+      function parseRegexFilter(text) {
+        const input = String(text || "").trim();
+        if (!input) {
+          return { regexMode: false, regex: null, error: "", text: "" };
+        }
+
+        let regexModeLocal = false;
+        let candidate = input;
+
+        if (/^re:/i.test(candidate)) {
+          regexModeLocal = true;
+          candidate = candidate.slice(3).trim();
+        } else if (/^\/.+\/[a-z]*$/i.test(candidate)) {
+          regexModeLocal = true;
+        }
+
+        if (!regexModeLocal) {
+          return { regexMode: false, regex: null, error: "", text: input };
+        }
+
+        if (!candidate) {
+          return { regexMode: true, regex: null, error: "empty pattern", text: "" };
+        }
+
+        let source = candidate;
+        let flags = "i";
+        const slashForm = candidate.match(/^\/(.*)\/([a-z]*)$/i);
+        if (slashForm) {
+          source = slashForm[1];
+          flags = slashForm[2] || "";
+          if (!flags.includes("i")) {
+            flags += "i";
+          }
+        }
+        flags = [...new Set(flags.replace(/g/g, "").split(""))].join("");
+
+        try {
+          return { regexMode: true, regex: new RegExp(source, flags), error: "", text: "" };
+        } catch {
+          if (/[*?]/.test(source)) {
+            try {
+              const globRegex = new RegExp(globToRegexSource(source), flags);
+              return { regexMode: true, regex: globRegex, error: "", text: "" };
+            } catch {
+            }
+          }
+          return { regexMode: true, regex: null, error: "invalid pattern", text: "" };
+        }
       }
 
       function parseFilterQuery(rawQuery) {
         const raw = String(rawQuery || "").trim();
         if (!raw) {
-          return { text: "", statuses: [] };
+          return { text: "", statuses: [], regex: null, regexError: "", regexMode: false };
         }
 
         const statuses = new Set();
-        const words = raw.split(/\s+/).filter(Boolean);
-        const textParts = [];
+        const textCandidate = raw.replace(/(^|\s)@([AMDCRTU])\b/gi, (_, prefix, code) => {
+          statuses.add(String(code || "").toUpperCase());
+          return prefix || " ";
+        }).trim();
 
-        for (const word of words) {
-          const token = word.toUpperCase();
-          if (/^@[AMDCRTU]$/.test(token)) {
-            statuses.add(token.slice(1));
-            continue;
-          }
-          textParts.push(word);
-        }
+        const regexParsed = parseRegexFilter(textCandidate);
 
         return {
-          text: textParts.join(" ").trim(),
-          statuses: Array.from(statuses)
+          text: regexParsed.text,
+          statuses: Array.from(statuses),
+          regex: regexParsed.regex,
+          regexError: regexParsed.error,
+          regexMode: regexParsed.regexMode
         };
       }
 
       function matchesTextFilter(item) {
+        if (regexMode) {
+          if (!textFilterRegex) {
+            return false;
+          }
+          const note = getNote(item);
+          return textFilterRegex.test(item) || textFilterRegex.test(note);
+        }
         if (!textFilter) {
           return true;
         }
@@ -911,6 +997,55 @@
 
         selectedItemByPane[kind] = value;
         refreshSelectionClasses(kind);
+      }
+
+      function selectAllVisible(kind = activePane) {
+        const targetKind = kind === "done" ? "done" : "pending";
+        setActivePane(targetKind);
+        const visible = getVisibleItems(targetKind);
+        if (visible.length === 0) {
+          return;
+        }
+        selectedItemsByPane[targetKind].clear();
+        for (const value of visible) {
+          selectedItemsByPane[targetKind].add(value);
+        }
+        selectedItemByPane[targetKind] = visible[visible.length - 1];
+        refreshSelectionClasses(targetKind);
+        refreshSelectionClasses(targetKind === "done" ? "pending" : "done");
+        scrollSelectionIntoView(targetKind);
+      }
+
+      function flashCopyIndicator(kind) {
+        const targetKind = kind === "done" ? "done" : "pending";
+        const indicator = targetKind === "done" ? doneCopyIndicator : pendingCopyIndicator;
+        if (!indicator) {
+          return;
+        }
+        indicator.classList.add("show");
+        clearTimeout(copyIndicatorTimers[targetKind]);
+        copyIndicatorTimers[targetKind] = setTimeout(() => {
+          indicator.classList.remove("show");
+        }, 1000);
+      }
+
+      async function copySelectedItems(kind = activePane) {
+        const targetKind = kind === "done" ? "done" : "pending";
+        const values = getSelectedValues(targetKind);
+        const text = values.join("\n");
+        if (!text) {
+          render(`no selected ${targetKind} items`);
+          return false;
+        }
+        try {
+          await navigator.clipboard.writeText(text);
+          flashCopyIndicator(targetKind);
+          render(`copied ${values.length} selected ${targetKind}`);
+          return true;
+        } catch {
+          render("copy failed");
+          return false;
+        }
       }
 
       function navigateSelection(direction) {
@@ -1210,6 +1345,16 @@
           if (isShortcutModalOpen()) {
             return;
           }
+          if ((event.ctrlKey || event.metaKey) && key === "a") {
+            event.preventDefault();
+            selectAllVisible(activePane);
+            return;
+          }
+          if ((event.ctrlKey || event.metaKey) && key === "c") {
+            event.preventDefault();
+            void copySelectedItems(activePane);
+            return;
+          }
           if (key === "j" || key === "arrowleft") {
             event.preventDefault();
             setActivePane("pending");
@@ -1290,6 +1435,7 @@
           }
           try {
             await navigator.clipboard.writeText(text);
+            flashCopyIndicator("pending");
             render("copied pending");
           } catch {
             render("copy failed");
@@ -1304,6 +1450,7 @@
           }
           try {
             await navigator.clipboard.writeText(text);
+            flashCopyIndicator("done");
             render("copied done");
           } catch {
             render("copy failed");
@@ -1356,6 +1503,9 @@
           const parsed = parseFilterQuery(filterQuery);
           textFilter = parsed.text;
           statusFilterTokens = parsed.statuses;
+          textFilterRegex = parsed.regex;
+          regexFilterError = parsed.regexError;
+          regexMode = parsed.regexMode;
           render();
         });
 
