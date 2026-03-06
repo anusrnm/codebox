@@ -77,8 +77,10 @@ function safeJoin(base: string, ...paths: string[]): string {
 
 function parseArgs() {
   let servePath = DEFAULT_PATH;
-  let port = 8088;
+  let port = 3000;
   let host = "0.0.0.0";
+  let maxRequestBodyMb = 512;
+  let idleTimeout = 120;
   const args = Bun.argv.slice(2);
 
   for (let i = 0; i < args.length; i++) {
@@ -93,10 +95,16 @@ function parseArgs() {
     } else if (key === "--host" && value) {
       host = value;
       i++;
+    } else if (key === "--max-request-body-mb" && value) {
+      maxRequestBodyMb = Math.max(1, Number.parseInt(value, 10) || maxRequestBodyMb);
+      i++;
+    } else if (key === "--idle-timeout" && value) {
+      idleTimeout = Math.max(0, Number.parseInt(value, 10) || idleTimeout);
+      i++;
     }
   }
 
-  return { servePath, port, host };
+  return { servePath, port, host, maxRequestBodyMb, idleTimeout };
 }
 
 function getLocalIPv4Address() {
@@ -320,11 +328,14 @@ function clientIp(req: Request, server: Bun.Server): string {
   return server.requestIP(req)?.address ?? "unknown";
 }
 
-const { servePath, port, host } = parseArgs();
+const { servePath, port, host, maxRequestBodyMb, idleTimeout } = parseArgs();
 
 const server = Bun.serve({
   hostname: host,
   port,
+  // Support large multipart uploads (Bun otherwise rejects large bodies with 413).
+  maxRequestBodySize: maxRequestBodyMb * 1024 * 1024,
+  idleTimeout,
   async fetch(req: Request) {
     const started = Date.now();
     const url = new URL(req.url);
@@ -505,4 +516,6 @@ const server = Bun.serve({
   },
 });
 
-console.info(`Listening on http://${getLocalIPv4Address()}:${server.port}/`);
+console.info(
+  `Listening on http://${getLocalIPv4Address()}:${server.port}/ (maxRequestBodyMb=${maxRequestBodyMb}, idleTimeout=${idleTimeout}s)`,
+);
