@@ -11,6 +11,30 @@ type SortOrder = "asc" | "desc";
 
 const uploadRates = new Map<string, number[]>();
 
+function logError(context: string, error: unknown, details?: Record<string, unknown>) {
+  const err = error instanceof Error ? error : new Error(String(error));
+  console.error(`[${new Date().toISOString()}] ${context}`, {
+    message: err.message,
+    stack: err.stack,
+    ...(details ?? {}),
+  });
+}
+
+function logWarn(context: string, details?: Record<string, unknown>) {
+  console.warn(`[${new Date().toISOString()}] ${context}`, details ?? {});
+}
+
+function isBodyTooLargeError(error: unknown): boolean {
+  const message = error instanceof Error ? error.message.toLowerCase() : String(error).toLowerCase();
+  return (
+    message.includes("too large") ||
+    message.includes("payload") ||
+    message.includes("maxrequestbodysize") ||
+    message.includes("request body too large") ||
+    message.includes("content length")
+  );
+}
+
 const faviconBase64 = "iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAAC1UlEQVRYR+2XzWsTQRjGn9nZ3XSTdJM0YhK6KR5E9GDBQ0HRizQKInhR/BvUehA8WaxUi4IfFw96FPSkRxFEadCDePIiUr2oh1aTFDa06Vey3XysMyMtjcm61bRJD31hAyGTmd/7zPuxL8EopNTh1DCAC+xJsKcdlmOHPEy/T98iqfHUVfZlrB2nNjljhAyOD+YISLwTAA6caa6A04nDV87cBth6ChReF2BnbM+wCA4E4d/vX11Xzpex8G4B1jcLlUIFYJEl+SUoOxR07e5CYCAAOSQ37NugQO5+DqUvJU+AntM9CB8Pi3WLHxZhPjbhlN3jWdunIXGpscy4AtAQRSgVcgXR9mjw7fLBztnIjGXgVB1QnSJ8Iiw8JgpBtVCF9d0SgPoRHaFjjfu5AqiGCmPE8FQi/yyP+TfzTG/AuGZATaiN/2HCOBVHQP1pLQNk72VhfbWg9jJgBvCv1jrAXQbAAo/L33e7D0Rq9PJvUC0D5J+yK3jLroCZflRH9EwURF4/RMsAZbOMzM0MaqWagJAjMoIHgwgcCMDX5wM8WNzTkAWV5GMfTUzZqaB3uHf1l+UfyzAfmbCz9fVD7pHRfagb+qAOGqBN9/qvOqDEFCRvJOs2dGoOip+KIuVKEyXUrN+KcKPdFLFzMZGe684CJaEgfrF5lyaUCKndjBek4uci5tJzIkO4SQEJyetJAbPWWo4Br7SbeT6DwsuCWBY5FUHkZKS9APxqJi9Polaswd/vR3yoXtVNV4C7O3VlCpWZyuYArDSgZmWWH857QfZOdvOuYOnjEswnJnh71vZqUOIKpC4J1cUqihMsEF/NiYygQQpj1Nj4IFxbCd0CkoYp4ufjont6puHsi1nwwsJfJKJno15BLroc95Snnf3TFi2Ye0xUAjWmQuvXRCvmqjSzrfdK5unyBi/YVqCjoxm7TTGadXY4XRnP2aA41MYhdZp5/4CP578A2bR8uBXi+eIAAAAASUVORK5CYII=";
 
 function formatSize(size: number): string {
@@ -336,6 +360,13 @@ const server = Bun.serve({
   // Support large multipart uploads (Bun otherwise rejects large bodies with 413).
   maxRequestBodySize: maxRequestBodyMb * 1024 * 1024,
   idleTimeout,
+  error(error: unknown) {
+    logError("Server-level Bun error", error, {
+      maxRequestBodyMb,
+      idleTimeout,
+    });
+    return buildResponse(errorPage("500 Internal Server Error", "Unhandled server error"), 500);
+  },
   async fetch(req: Request) {
     const started = Date.now();
     const url = new URL(req.url);
@@ -353,35 +384,92 @@ const server = Bun.serve({
 
       if (url.pathname === "/upload" && req.method === "POST") {
         const ip = clientIp(req, server);
+        const contentLength = req.headers.get("content-length") ?? "unknown";
+        const contentType = req.headers.get("content-type") ?? "unknown";
+        console.info(
+          `[UPLOAD_START] ip=${ip} contentLength=${contentLength} contentType=${contentType} limitMb=${maxRequestBodyMb}`,
+        );
         const now = Date.now() / 1000;
         const samples = (uploadRates.get(ip) ?? []).filter((t) => now - t < 60);
         if (samples.length >= 10) {
           status = 429;
+          logWarn("Upload rate-limited", {
+            ip,
+            requestsInLastMinute: samples.length,
+            contentLength,
+            contentType,
+          });
           return new Response("Rate limit exceeded: Too many uploads from your IP in the last minute", { status });
         }
         samples.push(now);
         uploadRates.set(ip, samples);
 
-        const form = await req.formData();
+        let form: FormData;
+        try {
+          form = await req.formData();
+        } catch (error) {
+          status = isBodyTooLargeError(error) ? 413 : 400;
+          logError("Upload formData parse failed", error, {
+            ip,
+            contentLength,
+            contentType,
+            limitMb: maxRequestBodyMb,
+            status,
+          });
+          return new Response(
+            status === 413
+              ? "Upload failed: request body too large for current server limit"
+              : "Upload failed: invalid multipart form data",
+            { status },
+          );
+        }
+
         const pathPart = String(form.get("path") ?? "");
         const files = form.getAll("file").filter((f): f is File => f instanceof File && f.size >= 0);
+        const totalBytes = files.reduce((sum, file) => sum + file.size, 0);
+        console.info(
+          `[UPLOAD_PARSED] ip=${ip} files=${files.length} totalBytes=${totalBytes} (${formatSize(totalBytes)}) path=${pathPart || "/"}`,
+        );
         if (!files.length) {
           status = 400;
+          logWarn("Upload rejected: no file fields present", {
+            ip,
+            pathPart,
+            contentLength,
+            contentType,
+          });
           return new Response("No files uploaded: Please select files to upload", { status });
         }
 
         const uploaded: string[] = [];
         for (const file of files) {
           const filename = file.name;
-          const savePath = safeJoin(servePath, pathPart, filename);
-          await mkdir(resolve(savePath, ".."), { recursive: true });
-          await Bun.write(savePath, file);
-          uploaded.push(filename);
-          console.info(`Uploaded file: ${filename} to ${pathPart}`);
+          try {
+            const savePath = safeJoin(servePath, pathPart, filename);
+            await mkdir(resolve(savePath, ".."), { recursive: true });
+            await Bun.write(savePath, file);
+            uploaded.push(filename);
+            console.info(`Uploaded file: ${filename} (${formatSize(file.size)}) to ${pathPart}`);
+          } catch (error) {
+            status = 500;
+            logError("Upload write failed", error, {
+              ip,
+              filename,
+              fileSize: file.size,
+              pathPart,
+            });
+            return new Response(`Upload failed while writing file: ${filename}`, { status });
+          }
         }
 
         if (!uploaded.length) {
           status = 500;
+          logWarn("Upload failed: no files saved after parsing", {
+            ip,
+            pathPart,
+            contentLength,
+            contentType,
+          });
           return new Response("Upload failed: No files were successfully uploaded", { status });
         }
 
@@ -391,6 +479,9 @@ const server = Bun.serve({
           .map(encodeURIComponent)
           .join("/")}`;
         status = 303;
+        console.info(
+          `[UPLOAD_SUCCESS] ip=${ip} files=${uploaded.length} totalBytes=${totalBytes} redirect=${redirectPath || "/"}`,
+        );
         return new Response(null, {
           status,
           headers: { Location: redirectPath === "/" ? "/" : redirectPath },
@@ -505,7 +596,10 @@ const server = Bun.serve({
       status = 200;
       return buildResponse(html, status);
     } catch (error) {
-      console.error("Unhandled error", error);
+      logError("Unhandled request error", error, {
+        method: req.method,
+        path: rawPath,
+      });
       status = 500;
       return buildResponse(errorPage("500 Internal Server Error", "An internal error occurred"), status);
     } finally {
