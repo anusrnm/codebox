@@ -1,3 +1,21 @@
+/**
+ * LANGUAGE FLASHCARDS APP
+ * 
+ * To add more words to any language:
+ * 1. Find the language in the `languages` object below (e.g., "english", "hindi", "tamil")
+ * 2. Locate the `words` array within that language
+ * 3. Add new entries with this format:
+ *    { main: "Word", sub: "Definition or translation" }
+ * 
+ * Example:
+ *    { main: "Rainbow", sub: "Colorful arc in the sky" }
+ * 
+ * To add a new language:
+ * 1. Add a new key to the `languages` object
+ * 2. Include these arrays: letters, vyanjan (or skip if not applicable), words
+ * 3. The app will automatically add it to the language selector
+ */
+
 const DEV = {
   VIRAMA: "\u094D",
   KA: "\u0915",
@@ -156,7 +174,17 @@ const languages = {
       { main: "Sun", sub: "The star that gives us light" },
       { main: "Tree", sub: "A tall plant" },
       { main: "Water", sub: "We drink it" },
-      { main: "Book", sub: "We read it" }
+      { main: "Book", sub: "We read it" },
+      { main: "Dog", sub: "Man's best friend" },
+      { main: "Bird", sub: "Has wings and can fly" },
+      { main: "Fish", sub: "Lives in water" },
+      { main: "House", sub: "Where we live" },
+      { main: "Moon", sub: "Glows at night" },
+      { main: "Star", sub: "Twinkles in the sky" },
+      { main: "Flower", sub: "Beautiful and colorful" },
+      { main: "Mountain", sub: "Very high and rocky" },
+      { main: "Ocean", sub: "Large body of salt water" },
+      { main: "Cloud", sub: "Floats in the sky" }
     ]
   },
   hindi: {
@@ -208,7 +236,22 @@ const languages = {
       { main: "फल", sub: "Fruit" },
       { main: "फूल", sub: "Flower" },
       { main: "पानी", sub: "Water" },
-      { main: "किताब", sub: "Book" }
+      { main: "किताब", sub: "Book" },
+      { main: "सूरज", sub: "Sun" },
+      { main: "चाँद", sub: "Moon" },
+      { main: "तारा", sub: "Star" },
+      { main: "पेड़", sub: "Tree" },
+      { main: "नदी", sub: "River" },
+      { main: "पर्वत", sub: "Mountain" },
+      { main: "बिल्ली", sub: "Cat" },
+      { main: "कुत्ता", sub: "Dog" },
+      { main: "मछली", sub: "Fish" },
+      { main: "पक्षी", sub: "Bird" },
+      { main: "हाथ", sub: "Hand" },
+      { main: "पैर", sub: "Foot" },
+      { main: "आँख", sub: "Eye" },
+      { main: "कान", sub: "Ear" },
+      { main: "नाक", sub: "Nose" }
     ]
   },
   tamil: {
@@ -252,7 +295,17 @@ const languages = {
       { main: "நீர்", sub: "Water" },
       { main: "மனை", sub: "House" },
       { main: "பூ", sub: "Flower" },
-      { main: "நாய்", sub: "Dog" }
+      { main: "நாய்", sub: "Dog" },
+      { main: "பூனை", sub: "Cat" },
+      { main: "கடல்", sub: "Ocean" },
+      { main: "சூரியன்", sub: "Sun" },
+      { main: "நிலா", sub: "Moon" },
+      { main: "விண்மீன்", sub: "Star" },
+      { main: "மலை", sub: "Mountain" },
+      { main: "நதி", sub: "River" },
+      { main: "பறவை", sub: "Bird" },
+      { main: "மீன்", sub: "Fish" },
+      { main: "புத்தகம்", sub: "Book" }
     ]
   },
   kannada: {
@@ -316,7 +369,17 @@ const languages = {
       { main: "ನೀರು", sub: "Water" },
       { main: "ಪುಸ್ತಕ", sub: "Book" },
       { main: "ಸೂರ್ಯ", sub: "Sun" },
-      { main: "ಮರ", sub: "Tree" }
+      { main: "ಮರ", sub: "Tree" },
+      { main: "ಚಂದ್ರ", sub: "Moon" },
+      { main: "ನಕ್ಷತ್ರ", sub: "Star" },
+      { main: "ಸಮುದ್ರ", sub: "Ocean" },
+      { main: "ಪರ್ವತ", sub: "Mountain" },
+      { main: "ನದಿ", sub: "River" },
+      { main: "ಪಕ್ಷಿ", sub: "Bird" },
+      { main: "ಮೀನು", sub: "Fish" },
+      { main: "ಬೆಕ್ಕು", sub: "Cat" },
+      { main: "ನಾಯಿ", sub: "Dog" },
+      { main: "ಮೇಘ", sub: "Cloud" }
     ]
   }
 };
