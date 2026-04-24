@@ -1,11 +1,10 @@
-import https, { get } from 'https';
-import http, { get as _get } from 'http';
-import { promises as dns } from 'dns';
-import { getServers } from 'dns';
-import { createConnection } from 'net';
-import { platform, arch, release, hostname as _hostname, type as _type, cpus, totalmem, freemem, uptime, networkInterfaces } from 'os';
-import { connect } from 'tls';
-import { performance } from 'perf_hooks';
+import https, { get } from 'node:https';
+import http, { get as _get } from 'node:http';
+import { getServers, promises as dns } from 'node:dns';
+import { createConnection } from 'node:net';
+import { platform, arch, release, hostname as _hostname, type as _type, cpus, totalmem, freemem, uptime, networkInterfaces } from 'node:os';
+import { connect } from 'node:tls';
+import { performance } from 'node:perf_hooks';
 
 // ANSI color codes
 const colors = {
