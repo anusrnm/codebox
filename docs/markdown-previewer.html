@@ -5,697 +5,940 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Markdown to HTML & PDF Export</title>
 
-    <!-- Correct CDN links for marked, jsPDF, dompurify, and html2canvas -->
-    <script type="module">
-        import { marked } from 'https://cdn.jsdelivr.net/npm/marked/lib/marked.esm.js';
-        document.addEventListener('DOMContentLoaded', function () {
-            const markdownInput = document.getElementById('markdown-input');
-            const preview = document.getElementById('preview');
-            const copyBtn = document.getElementById('copy-btn');
-            const wordCount = document.getElementById('word-count');
-            const charCount = document.getElementById('char-count');
-            const themeSelect = document.getElementById('theme-select');
-            const printBtn = document.getElementById('print-btn');
-            const responseTime = document.getElementById('response-time');
-            const filenameInput = document.getElementById('filename-input');
-            const saveBtn = document.getElementById('save-btn');
+    <!-- CDN for marked (UMD, pinned) -->
+    <script src="https://cdn.jsdelivr.net/npm/marked@15.0.4/marked.min.js"></script>
 
-            // Responsive: Debounce rendering for performance
-            let renderTimeout;
-            function debounceRenderMarkdown() {
-                clearTimeout(renderTimeout);
-                renderTimeout = setTimeout(renderMarkdown, 200);
-            }
+    <!-- CDN for DOMPurify (pinned) -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/2.4.0/purify.min.js"
+        integrity="sha384-Tsl3d5pUAO7a13enIvSsL3O0/95nsthPJiPto5NtLuY8w3+LbZOpr3Fl2MNmrh1E"
+        crossorigin="anonymous"></script>
 
-            // Load from localStorage
-            if (localStorage.getItem('markdownInput')) {
-                markdownInput.value = localStorage.getItem('markdownInput');
-            }
-            // Load filename from localStorage
-            if (localStorage.getItem('markdownFilename')) {
-                filenameInput.value = localStorage.getItem('markdownFilename');
-            }
-
-            // Function to render Markdown to HTML using marked.parse and sanitize
-            function renderMarkdown() {
-                const start = performance.now();
-                const markdownText = markdownInput.value;
-                localStorage.setItem('markdownInput', markdownText);
-                const htmlContent = marked.parse(markdownText);
-                // Sanitize output
-                preview.innerHTML = DOMPurify.sanitize(htmlContent);
-                // Syntax highlight code blocks
-                preview.querySelectorAll('pre code').forEach(block => {
-                    window.hljs.highlightElement(block);
-                });
-                // Add copy button to each pre block
-                preview.querySelectorAll('pre').forEach(pre => {
-                    if (!pre.querySelector('.pre-copy-btn')) {
-                        const btn = document.createElement('button');
-                        btn.textContent = 'Copy';
-                        btn.className = 'pre-copy-btn';
-                        btn.title = 'Copy code to clipboard';
-                        btn.style.position = 'absolute';
-                        btn.style.top = '8px';
-                        btn.style.right = '8px';
-                        btn.style.padding = '4px 10px';
-                        btn.style.fontSize = '13px';
-                        btn.style.background = '#4CAF50';
-                        btn.style.color = '#fff';
-                        btn.style.border = 'none';
-                        btn.style.borderRadius = '4px';
-                        btn.style.cursor = 'pointer';
-                        btn.style.zIndex = '2';
-                        btn.addEventListener('click', function(e) {
-                            e.stopPropagation();
-                            const code = pre.querySelector('code');
-                            if (code) {
-                                navigator.clipboard.writeText(code.textContent).then(() => {
-                                    btn.textContent = 'Copied!';
-                                    setTimeout(() => btn.textContent = 'Copy', 1200);
-                                });
-                            }
-                        });
-                        pre.style.position = 'relative';
-                        pre.appendChild(btn);
-                    }
-                });
-                updateCounts(markdownText);
-                const end = performance.now();
-                responseTime.textContent = `Conversion time: ${(end - start).toFixed(2)} ms`;
-            }
-
-            // Update word/char count
-            function updateCounts(text) {
-                const words = text.trim().split(/\s+/).filter(Boolean);
-                wordCount.textContent = 'Words: ' + words.length;
-                charCount.textContent = 'Characters: ' + text.length;
-            }
-
-            // Event listener for real-time Markdown rendering (debounced)
-            markdownInput.addEventListener('input', debounceRenderMarkdown);
-
-            // Initial render
-            renderMarkdown();
-
-            // Copy HTML button
-            copyBtn.addEventListener('click', function () {
-                navigator.clipboard.writeText(preview.innerHTML)
-                    .then(() => {
-                        copyBtn.textContent = 'Copied!';
-                        setTimeout(() => copyBtn.textContent = 'Copy HTML', 1200);
-                    })
-                    .catch(() => alert('Copy failed.'));
-            });
-
-            // Theme selection
-            function setTheme(theme) {
-                document.body.classList.remove('theme-light', 'theme-dark', 'theme-solarized', 'theme-high-contrast');
-                document.body.classList.add('theme-' + theme);
-                localStorage.setItem('theme', theme);
-            }
-            themeSelect.addEventListener('change', function () {
-                setTheme(themeSelect.value);
-            });
-            // Restore theme
-            const savedTheme = localStorage.getItem('theme') || 'light';
-            themeSelect.value = savedTheme;
-            setTheme(savedTheme);
-
-            // Print button
-            printBtn.addEventListener('click', function () {
-                // Copy theme class to html for print
-                const themeClass = Array.from(document.body.classList).find(c => c.startsWith('theme-'));
-                document.documentElement.classList.add(themeClass);
-                window.print();
-                setTimeout(() => {
-                    document.documentElement.classList.remove(themeClass);
-                }, 1000);
-            });
-
-            // Filename input: switch to editable on click/focus
-            filenameInput.addEventListener('click', function() {
-                filenameInput.readOnly = false;
-                filenameInput.focus();
-            });
-            filenameInput.addEventListener('blur', function() {
-                filenameInput.readOnly = true;
-                localStorage.setItem('markdownFilename', filenameInput.value);
-            });
-            filenameInput.addEventListener('keydown', function(e) {
-                if (e.key === 'Enter') {
-                    filenameInput.readOnly = true;
-                    localStorage.setItem('markdownFilename', filenameInput.value);
-                    saveBtn.focus();
-                }
-            });
-
-            // Save Markdown to file
-            saveBtn.addEventListener('click', function() {
-                let filename = filenameInput.value.trim();
-                if (!filename) filename = 'document.md';
-                if (!filename.endsWith('.md')) filename += '.md';
-                const blob = new Blob([markdownInput.value], { type: 'text/markdown' });
-                const a = document.createElement('a');
-                a.href = URL.createObjectURL(blob);
-                a.download = filename;
-                document.body.appendChild(a);
-                a.click();
-                setTimeout(() => {
-                    document.body.removeChild(a);
-                    URL.revokeObjectURL(a.href);
-                }, 100);
-                saveBtn.textContent = 'Saved!';
-                setTimeout(() => saveBtn.textContent = 'Save', 1200);
-            });
-        });
-    </script>
-
-    <!-- CDN for jsPDF UMD Version -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-
-    <!-- CDN for DOMPurify -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/2.4.0/purify.min.js"></script>
-
-    <!-- CDN for html2canvas (latest) -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
-
-    <!-- Highlight.js CDN and theme -->
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.11.1/styles/default.min.css">
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.11.1/highlight.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.11.1/languages/python.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.11.1/languages/javascript.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.11.1/languages/java.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.11.1/languages/cpp.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.11.1/languages/c.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.11.1/languages/csharp.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.11.1/languages/ruby.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.11.1/languages/go.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.11.1/languages/php.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.11.1/languages/html.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.11.1/languages/css.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.11.1/languages/xml.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.11.1/languages/bash.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.11.1/languages/typescript.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.11.1/languages/json.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.11.1/languages/markdown.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.11.1/languages/sql.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.11.1/languages/swift.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.11.1/languages/kotlin.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.11.1/languages/rust.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.11.1/languages/shell.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.11.1/languages/properties.min.js"></script>
+    <!-- Highlight.js CDN (pinned, single bundle) -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.11.1/styles/default.min.css"
+        integrity="sha384-4Y0nObtF3CbKnh+lpzmAVdAMtQXl+ganWiiv73RcGVdRdfVIya8Cao1C8ZsVRRDz"
+        crossorigin="anonymous">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.11.1/highlight.min.js"
+        integrity="sha384-RH2xi4eIQ/gjtbs9fUXM68sLSi99C7ZWBRX1vDrVv6GQXRibxXLbwO2NGZB74MbU"
+        crossorigin="anonymous"></script>
 
     <style>
-        body {
-            font-family: Arial, sans-serif;
-            margin: 5px;
-            background-color: #f9f9f9;
-            transition: background 0.3s, color 0.3s;
-        }
-        /* Style checkboxes in the Markdown preview */
-        #preview input[type="checkbox"] {
-            appearance: none;
-            -webkit-appearance: none;
-            width: 16px;
-            height: 16px;
-            border: 2px solid #4CAF50;
-            border-radius: 4px;
-            background: #fff;
-            cursor: pointer;
-            position: relative;
-            vertical-align: middle;
-            transition: border-color 0.2s, background 0.2s;
-        }
-        #preview input[type="checkbox"]:checked {
-            background: #4CAF50;
-            border-color: #4CAF50;
-        }
-        #preview input[type="checkbox"][disabled] {
-            opacity: 0.6;
-            cursor: not-allowed;
-            background: #fff;
-            border-color: #4CAF50;
-        }
-        #preview input[type="checkbox"][disabled]:checked {
-            background: #4CAF50;
-            border-color: #4CAF50;
-        }
-        #preview input[type="checkbox"]:checked::after {
-            content: '';
-            position: absolute;
-            left: 4px;
-            top: 0px;
-            width: 4px;
-            height: 8px;
-            border: solid #fff;
-            border-width: 0 3px 3px 0;
-            transform: rotate(45deg);
-            pointer-events: none;
+        /* --- CSS Custom Properties --- */
+        :root {
+            --bg: #f9f9f9;
+            --fg: #222;
+            --preview-bg: #fff;
+            --preview-fg: #222;
+            --preview-border: #ddd;
+            --textarea-bg: #fff;
+            --textarea-fg: #222;
+            --textarea-border: #ddd;
+            --th-bg: #f0f0f0;
+            --th-fg: #222;
+            --row-border: #ddd;
+            --pre-bg: #f5f5f5;
+            --pre-fg: inherit;
+            --pre-shadow: rgba(0,0,0,0.04);
+            --code-bg: #f5f5f5;
+            --code-fg: inherit;
+            --blockquote-bg: #f0f0f0;
+            --blockquote-border: #ccc;
+            --blockquote-fg: inherit;
+            --accent: #4CAF50;
+            --accent-hover: #45a049;
+            --select-bg: #fff;
+            --select-fg: #222;
+            --select-border: #4CAF50;
+            --filename-fg: #222;
+            --filename-focus-bg: #fff;
+            --filename-focus-border: #4CAF50;
+            --heading-h1: inherit;
+            --heading-h2: inherit;
+            --para-fg: inherit;
+            --li-fg: inherit;
+            --focus-ring: 2px solid #4CAF50;
         }
 
+        .theme-dark {
+            --bg: #222; --fg: #eee;
+            --preview-bg: #333; --preview-fg: #eee; --preview-border: #444;
+            --textarea-bg: #222; --textarea-fg: #eee; --textarea-border: #444;
+            --th-bg: #444; --th-fg: #eee; --row-border: #444;
+            --pre-bg: #222; --pre-fg: #eee; --pre-shadow: rgba(0,0,0,0.12);
+            --code-bg: #222; --code-fg: #eee;
+            --blockquote-bg: #222; --blockquote-border: #888; --blockquote-fg: #aaa;
+            --select-bg: #222; --select-fg: #eee; --select-border: #45a049;
+            --filename-fg: #eee; --filename-focus-bg: #222; --filename-focus-border: #45a049;
+            --heading-h1: #eee; --heading-h2: #ccc; --para-fg: #bbb; --li-fg: #ccc;
+        }
+
+        .theme-solarized {
+            --bg: #fdf6e3; --fg: #586e75;
+            --preview-bg: #eee8d5; --preview-fg: #586e75; --preview-border: #b58900;
+            --textarea-bg: #fdf6e3; --textarea-fg: #586e75; --textarea-border: #b58900;
+            --th-bg: #eee8d5; --th-fg: #586e75; --row-border: #b58900;
+            --pre-bg: #eee8d5; --pre-fg: #586e75; --pre-shadow: rgba(0,0,0,0.04);
+            --code-bg: #eee8d5; --code-fg: #586e75;
+            --blockquote-bg: #eee8d5; --blockquote-border: #b58900; --blockquote-fg: #586e75;
+            --accent: #b58900; --accent-hover: #cb4b16;
+            --select-bg: #eee8d5; --select-fg: #586e75; --select-border: #b58900;
+            --filename-fg: #586e75; --filename-focus-bg: #eee8d5; --filename-focus-border: #b58900;
+            --heading-h1: #586e75; --heading-h2: #586e75; --para-fg: #586e75; --li-fg: #586e75;
+        }
+
+        .theme-high-contrast {
+            --bg: #000; --fg: #fff;
+            --preview-bg: #000; --preview-fg: #fff; --preview-border: #fff;
+            --textarea-bg: #000; --textarea-fg: #fff; --textarea-border: #fff;
+            --th-bg: #222; --th-fg: #fff; --row-border: #fff;
+            --pre-bg: #000; --pre-fg: #fff; --pre-shadow: none;
+            --code-bg: #000; --code-fg: #fff;
+            --blockquote-bg: #000; --blockquote-border: #fff; --blockquote-fg: #fff;
+            --accent: #4CAF50; --accent-hover: #45a049;
+            --select-bg: #000; --select-fg: #fff; --select-border: #fff;
+            --filename-fg: #fff; --filename-focus-bg: #000; --filename-focus-border: #fff;
+            --heading-h1: #fff; --heading-h2: #fff; --para-fg: #fff; --li-fg: #fff;
+        }
+
+        /* --- Base --- */
+        html, body { height: 100%; margin: 0; }
+        body {
+            font-family: Arial, sans-serif;
+            padding: 5px;
+            background-color: var(--bg);
+            color: var(--fg);
+            transition: background 0.3s, color 0.3s;
+            display: flex; flex-direction: column;
+            box-sizing: border-box;
+        }
+
+        /* Focus visible outlines */
+        *:focus-visible {
+            outline: var(--focus-ring);
+            outline-offset: 2px;
+        }
+
+        /* --- Checkbox --- */
+        #preview input[type="checkbox"] {
+            appearance: none; -webkit-appearance: none;
+            width: 16px; height: 16px;
+            border: 2px solid var(--accent); border-radius: 4px;
+            background: var(--preview-bg); cursor: pointer;
+            position: relative; vertical-align: middle;
+            transition: border-color 0.2s, background 0.2s;
+        }
+        #preview input[type="checkbox"]:checked { background: var(--accent); border-color: var(--accent); }
+        #preview input[type="checkbox"][disabled] { opacity: 0.6; cursor: not-allowed; }
+        #preview input[type="checkbox"]:checked::after {
+            content: ''; position: absolute; left: 4px; top: 0;
+            width: 4px; height: 8px;
+            border: solid #fff; border-width: 0 3px 3px 0;
+            transform: rotate(45deg); pointer-events: none;
+        }
+
+        /* --- Layout --- */
         .main-content {
-            display: flex;
-            gap: 5px;
-            align-items: flex-start;
+            display: flex; gap: 0; align-items: stretch; position: relative;
+            flex: 1 1 auto; min-height: 0;
         }
+
         textarea {
-            width: 100%;
-            height: calc(100vh - 80px);
-            font-family: monospace;
-            margin-bottom: 0;
-            resize: none;
-            flex: 1 1 50%;
-            box-sizing: border-box;
-            min-height: 200px;
+            width: 100%; height: 100%;
+            font-family: monospace; margin-bottom: 0; resize: none;
+            flex: 1 1 auto; box-sizing: border-box; min-height: 0;
+            background-color: var(--textarea-bg); color: var(--textarea-fg);
+            border: 1px solid var(--textarea-border);
+            padding: 12px 12px 28px 12px; font-size: 14px; line-height: 1.5;
+            tab-size: 4;
         }
-        #preview {
-            border: 1px solid #ddd;
-            padding: 20px;
-            background-color: #fff;
-            min-height: 200px;
-            height: calc(100vh - 80px);
-            overflow-x: auto;
-            flex: 1 1 50%;
-            box-sizing: border-box;
-            font-family:'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        textarea.drag-over {
+            border-color: var(--accent); box-shadow: inset 0 0 10px rgba(76,175,80,0.3);
         }
-        #preview table {
-            width: 100%;
-            border-collapse: collapse;
-            margin-top: 20px;
-            background: inherit;
-        }
-        #preview th, #preview td {
-            padding: 10px;
-            text-align: left;
-            border: none;
-        }
-        #preview th {
-            background-color: #f0f0f0;
-            font-weight: bold;
-        }
-        #preview tr {
-            border-bottom: 1px solid #ddd;
-        }
-        #preview pre {
-            background: #f5f5f5;
-            border-radius: 6px;
-            padding: 5px 5px;
-            margin: 10px 0;
-            font-size: 15px;
-            font-family: 'Fira Mono', 'Consolas', 'Menlo', 'Monaco', monospace;
-            overflow-x: auto;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.04);
-        }
-        .theme-dark #preview pre {
-            background: #222;
-            color: #eee;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.12);
-        }
-        .theme-solarized #preview pre {
-            background: #eee8d5;
-            color: #657b83;
-        }
-        .theme-high-contrast #preview pre {
-            background: #000;
-            color: #fff;
-            border: 1px solid #fff;
-        }
-        @media (max-width: 900px) {
-            .main-content {
-                flex-direction: column;
-                gap: 0;
-            }
-            textarea, #preview {
-                min-width: 0;
-                width: 100%;
-                min-height: 200px;
-            }
-        }
-        .toolbar {
-            display: flex;
-            gap: 10px;
-            align-items: center;
-            margin-bottom: 10px;
-            flex-wrap: wrap;
-        }
-        button {
-            padding: 10px 20px;
-            background-color: #4CAF50;
-            color: white;
-            border: none;
-            cursor: pointer;
-            border-radius: 4px;
+
+        /* Resizer handle */
+        #resizer {
+            width: 6px; cursor: col-resize;
+            background: var(--preview-border);
+            flex-shrink: 0;
             transition: background 0.2s;
         }
-        button[title] {
-            position: relative;
+        #resizer:hover { background: var(--accent); }
+
+        #preview {
+            border: 1px solid var(--preview-border);
+            padding: 20px;
+            background-color: var(--preview-bg);
+            color: var(--preview-fg);
+            min-height: 0;
+            overflow-y: auto; overflow-x: auto;
+            flex: 1 1 50%; box-sizing: border-box;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
         }
-        button:hover {
-            background-color: #45a049;
+        #preview table { width: 100%; border-collapse: collapse; margin-top: 20px; background: inherit; }
+        #preview th, #preview td { padding: 10px; text-align: left; border: none; }
+        #preview th { background-color: var(--th-bg); color: var(--th-fg); font-weight: bold; }
+        #preview tr { border-bottom: 1px solid var(--row-border); }
+        #preview pre {
+            background: var(--pre-bg); color: var(--pre-fg);
+            border-radius: 6px; padding: 12px 48px 12px 12px; margin: 10px 0;
+            font-size: 15px; font-family: 'Fira Mono','Consolas','Menlo','Monaco',monospace;
+            overflow-x: auto; box-shadow: 0 2px 8px var(--pre-shadow); position: relative;
         }
-        #word-count, #char-count, #response-time {
-            margin-left: 15px;
-            font-size: 14px;
-            color: #888;
+        #preview code { padding: 2px 4px; border-radius: 4px; background-color: var(--code-bg); color: var(--code-fg); }
+        #preview h1 { color: var(--heading-h1); }
+        #preview h2 { color: var(--heading-h2); }
+        #preview p { color: var(--para-fg); }
+        #preview li { color: var(--li-fg); }
+        #preview blockquote {
+            background-color: var(--blockquote-bg); border-left: 5px solid var(--blockquote-border);
+            color: var(--blockquote-fg); padding: 3px 12px; margin: 5px 0;
+        }
+        #preview blockquote p { margin-top: 5px; margin-bottom: 5px; }
+
+        /* --- Toolbar --- */
+        .toolbar {
+            display: flex; gap: 8px; align-items: center;
+            margin-bottom: 8px; flex-wrap: wrap; padding: 4px 0;
+        }
+        button {
+            padding: 8px 16px; background-color: var(--accent); color: white;
+            border: none; cursor: pointer; border-radius: 4px;
+            transition: background 0.2s; font-size: 14px;
+        }
+        button:hover { background-color: var(--accent-hover); }
+        .input-wrapper {
+            position: relative; flex: 1 1 50%; display: flex; flex-direction: column;
+            min-height: 0;
+        }
+        .input-stats {
+            position: absolute; bottom: 6px; right: 12px; z-index: 2;
+            display: flex; gap: 10px; align-items: center;
+            pointer-events: none; user-select: none;
+        }
+        .input-stats span {
+            font-size: 11px; color: #999; background: var(--textarea-bg);
+            padding: 2px 7px; border-radius: 8px;
+            border: 1px solid var(--textarea-border);
+            opacity: 0.85; pointer-events: auto;
+            font-family: 'Segoe UI', Arial, sans-serif;
+            letter-spacing: 0.2px;
         }
         select#theme-select {
-            padding: 8px 16px;
-            border-radius: 4px;
-            border: 1px solid #4CAF50;
-            background: #fff;
-            color: #222;
-            font-size: 15px;
-            margin-left: 8px;
-            transition: background 0.2s, color 0.2s;
+            padding: 8px 12px; border-radius: 4px;
+            border: 1px solid var(--select-border);
+            background: var(--select-bg); color: var(--select-fg);
+            font-size: 14px; transition: background 0.2s, color 0.2s;
         }
-        .theme-dark select#theme-select {
-            background: #222;
-            color: #eee;
-            border-color: #45a049;
-        }
-        .theme-solarized select#theme-select {
-            background: #eee8d5;
-            color: #657b83;
-            border-color: #b58900;
-        }
-        .theme-high-contrast select#theme-select {
-            background: #000;
-            color: #fff;
-            border-color: #fff;
-        }
-        select#theme-select:focus {
-            outline: 2px solid #4CAF50;
-        }
-        /* Filename input: plain text look, styled on focus */
         #filename-input {
-            border: none;
-            background: transparent;
-            color: #222;
-            font-size: 15px;
-            padding: 8px 10px;
-            min-width: 120px;
-            transition: all 0.2s;
-            cursor: pointer;
+            border: none; background: transparent; color: var(--filename-fg);
+            font-size: 14px; padding: 8px 10px; min-width: 120px;
+            transition: all 0.2s; cursor: pointer;
         }
         #filename-input:focus, #filename-input:not([readonly]) {
-            border: 1px solid #4CAF50;
-            background: #fff;
-            color: #222;
-            outline: none;
-            cursor: text;
+            border: 1px solid var(--filename-focus-border);
+            background: var(--filename-focus-bg); outline: none; cursor: text;
         }
-        .theme-dark #filename-input {
-            color: #eee;
-            background: transparent;
+
+
+
+        /* --- Table of Contents --- */
+        #toc-panel {
+            position: fixed; top: 0; right: 0; width: 250px;
+            height: 100vh; background: var(--preview-bg); color: var(--preview-fg);
+            border-left: 1px solid var(--preview-border);
+            overflow-y: auto; z-index: 100; padding: 16px;
+            transition: transform 0.3s; box-shadow: -2px 0 8px rgba(0,0,0,0.1);
         }
-        .theme-dark #filename-input:focus, .theme-dark #filename-input:not([readonly]) {
-            background: #222;
-            color: #eee;
-            border-color: #45a049;
+        #toc-panel.collapsed { transform: translateX(100%); }
+        #toc-toggle {
+            position: fixed; top: 8px; right: 8px; z-index: 101;
+            padding: 6px 12px; font-size: 13px;
         }
-        .theme-solarized #filename-input {
-            color: #657b83;
-            background: transparent;
+        #toc-list { list-style: none; padding: 0; margin-top: 8px; }
+        #toc-list li { padding: 3px 0; }
+        #toc-list li a { color: var(--accent); text-decoration: none; font-size: 14px; }
+        #toc-list li a:hover { text-decoration: underline; }
+        .toc-level-h1 { font-weight: bold; }
+        .toc-level-h2 { padding-left: 12px !important; }
+        .toc-level-h3 { padding-left: 24px !important; }
+        .toc-level-h4 { padding-left: 36px !important; }
+        .toc-level-h5 { padding-left: 48px !important; }
+        .toc-level-h6 { padding-left: 60px !important; }
+
+        /* --- Find & Replace Bar --- */
+        #find-bar {
+            display: none; gap: 6px; align-items: center;
+            padding: 6px 10px; background: var(--preview-bg);
+            border: 1px solid var(--preview-border); border-radius: 4px;
+            margin-bottom: 6px; flex-wrap: wrap;
         }
-        .theme-solarized #filename-input:focus, .theme-solarized #filename-input:not([readonly]) {
-            background: #eee8d5;
-            color: #657b83;
-            border-color: #b58900;
+        #find-bar.visible { display: flex; }
+        #find-bar input[type="text"] {
+            padding: 6px 8px; font-size: 14px; border-radius: 4px;
+            border: 1px solid var(--preview-border);
+            background: var(--textarea-bg); color: var(--textarea-fg);
+            min-width: 140px;
         }
-        .theme-high-contrast #filename-input {
-            color: #fff;
-            background: transparent;
+        #find-bar button { padding: 6px 10px; font-size: 13px; }
+        #find-count { font-size: 13px; color: #888; min-width: 60px; }
+
+        /* --- Toast --- */
+        #toast-container {
+            position: fixed; bottom: 20px; right: 20px; z-index: 1000;
+            display: flex; flex-direction: column-reverse; gap: 8px;
         }
-        .theme-high-contrast #filename-input:focus, .theme-high-contrast #filename-input:not([readonly]) {
-            background: #000;
-            color: #fff;
-            border-color: #fff;
+        .toast {
+            background: #333; color: #fff; padding: 10px 20px;
+            border-radius: 6px; font-size: 14px;
+            opacity: 0; transform: translateY(10px);
+            transition: opacity 0.3s, transform 0.3s;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
         }
-        /* Theme: Dark */
-        .theme-dark {
-            background-color: #222 !important;
-            color: #eee !important;
+        .toast.show { opacity: 1; transform: translateY(0); }
+
+        /* --- Loading overlay --- */
+        #loading-overlay {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: var(--bg); z-index: 9999;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 18px; color: var(--fg);
         }
-        .theme-dark #preview {
-            background-color: #333 !important;
-            color: #eee !important;
-            border-color: #444 !important;
+        #loading-overlay .spinner {
+            width: 32px; height: 32px; border: 4px solid var(--preview-border);
+            border-top-color: var(--accent); border-radius: 50%;
+            animation: spin 0.8s linear infinite; margin-right: 12px;
         }
-        .theme-dark textarea {
-            background-color: #222 !important;
-            color: #eee !important;
-            border-color: #444 !important;
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        /* --- Zen Mode --- */
+        .zen-mode .toolbar,
+        .zen-mode #toc-toggle,
+        .zen-mode #toc-panel,
+        .zen-mode #find-bar,
+        .zen-mode .input-stats { display: none !important; }
+        .zen-mode .main-content textarea,
+        .zen-mode .main-content #preview {
+            height: 100% !important;
         }
-        .theme-dark #preview th {
-            background-color: #444;
-            color: #eee;
+
+        /* --- Responsive --- */
+        @media (max-width: 900px) {
+            .main-content { flex-direction: column; }
+            textarea, #preview, .input-wrapper { min-width: 0; width: 100%; min-height: 200px; }
+            #resizer { display: none; }
+            .toolbar { gap: 4px; }
+            .toolbar button { padding: 6px 10px; font-size: 13px; }
+            #toc-panel { width: 200px; }
+            /* Hamburger: collapse toolbar into wrap */
         }
-        .theme-dark #preview tr {
-            border-bottom: 1px solid #444;
-        }
-        /* Theme: Solarized */
-        .theme-solarized {
-            background-color: #fdf6e3 !important;
-            color: #657b83 !important;
-        }
-        .theme-solarized #preview {
-            background-color: #eee8d5 !important;
-            color: #657b83 !important;
-            border-color: #b58900 !important;
-        }
-        .theme-solarized textarea {
-            background-color: #fdf6e3 !important;
-            color: #657b83 !important;
-            border-color: #b58900 !important;
-        }
-        .theme-solarized #preview th {
-            background-color: #eee8d5;
-            color: #657b83;
-        }
-        .theme-solarized #preview tr {
-            border-bottom: 1px solid #b58900;
-        }
-        /* Theme: High Contrast */
-        .theme-high-contrast {
-            background-color: #000 !important;
-            color: #fff !important;
-        }
-        .theme-high-contrast #preview {
-            background-color: #000 !important;
-            color: #fff !important;
-            border-color: #fff !important;
-        }
-        .theme-high-contrast textarea {
-            background-color: #000 !important;
-            color: #fff !important;
-            border-color: #fff !important;
-        }
-        .theme-high-contrast #preview th {
-            background-color: #222;
-            color: #fff;
-        }
-        .theme-high-contrast #preview tr {
-            border-bottom: 1px solid #fff;
-        }
-        /* Theme: Light (default) */
-        .theme-light {
-            background-color: #f9f9f9 !important;
-            color: #222 !important;
-        }
-        .theme-light #preview {
-            background-color: #fff !important;
-            color: #222 !important;
-            border-color: #ddd !important;
-        }
-        .theme-light textarea {
-            background-color: #fff !important;
-            color: #222 !important;
-            border-color: #ddd !important;
-        }
-        /* Heading colors for each theme */
-        .theme-dark #preview h1 { color: #eee; }
-        .theme-solarized #preview h1 { color: #586e75; }
-        .theme-high-contrast #preview h1 { color: #fff; }
-        .theme-dark #preview h2 { color: #ccc; }
-        .theme-solarized #preview h2 { color: #657b83; }
-        .theme-high-contrast #preview h2 { color: #fff; }
-        .theme-dark #preview p { color: #bbb; }
-        .theme-solarized #preview p { color: #657b83; }
-        .theme-high-contrast #preview p { color: #fff; }
-        .theme-dark #preview code { background-color: #222; color: #eee; }
-        .theme-solarized #preview code { background-color: #eee8d5; color: #657b83; }
-        .theme-high-contrast #preview code { background-color: #000; color: #fff; }
-        .theme-dark #preview li { color: #ccc; }
-        .theme-solarized #preview li { color: #657b83; }
-        .theme-high-contrast #preview li { color: #fff; }
-        #preview code {
-            padding: 2px 4px;
-            border-radius: 4px;
-        }
-        #preview blockquote {
-            background-color: #f0f0f0;
-            border-left: 5px solid #ccc;
-            padding: 3px 12px;
-            margin: 5px 0px 5px 0px;
-        }
-        #preview blockquote p {
-            margin-top: 5px;
-            margin-bottom: 5px;
-        }
-        .theme-dark #preview blockquote { background-color: #222; border-left: 5px solid #888; color: #aaa; }
-        .theme-solarized #preview blockquote { background-color: #eee8d5; border-left: 5px solid #b58900; color: #657b83; }
-        .theme-high-contrast #preview blockquote { background-color: #000; border-left: 5px solid #fff; color: #fff; }
-        /* Print only preview, allow multi-page */
+
+        /* --- Print --- */
         @media print {
-            /* Ensure checkboxes use the same color in print */
             #preview input[type="checkbox"] {
-                width: 16px !important;
-                height: 16px !important;
-                background: #fff !important;
-                border: 2px solid #4CAF50 !important;
+                width: 16px !important; height: 16px !important;
+                background: #fff !important; border: 2px solid var(--accent) !important;
             }
             #preview input[type="checkbox"]:checked {
-                background: #4CAF50 !important;
-                border-color: #4CAF50 !important;
-                -webkit-print-color-adjust: exact !important;
-                print-color-adjust: exact !important;
+                background: var(--accent) !important; border-color: var(--accent) !important;
+                -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important;
             }
-            #preview input[type="checkbox"][disabled] {
-                background: #fff !important;
-                border-color: #4CAF50 !important;
-                opacity: 0.6 !important;
-            }
-            #preview input[type="checkbox"][disabled]:checked {
-                background: #4CAF50 !important;
-                border-color: #4CAF50 !important;
-                -webkit-print-color-adjust: exact !important;
-                print-color-adjust: exact !important;
-            }
-            /* Hide everything except preview */
-            .toolbar, .main-content textarea {
+            .toolbar, .main-content textarea, #resizer, #toc-panel, #toc-toggle,
+            #find-bar, .input-stats, #toast-container, #loading-overlay {
                 display: none !important;
             }
             #preview {
-                display: block !important;
-                width: 100% !important;
-                min-height: 100vh !important;
-                box-shadow: none !important;
-                border: none !important;
-                background: none !important;
-                color: inherit !important;
-                page-break-after: auto !important;
-                page-break-inside: avoid !important;
-                height: auto !important;
-                max-height: none !important;
+                display: block !important; width: 100% !important;
+                min-height: 100vh !important; box-shadow: none !important;
+                border: none !important; background: none !important;
+                color: inherit !important; height: auto !important; max-height: none !important;
             }
-            /* Children backgrounds preserved, but not #preview itself */
-            #preview td {
-                background-color: transparent !important;
-            }
+            #preview td { background-color: transparent !important; }
             #preview pre, #preview code {
-                white-space: pre-wrap !important;
-                word-break: break-word !important;
-                overflow: visible !important;
-                max-width: 100% !important;
+                white-space: pre-wrap !important; word-break: break-word !important;
+                overflow: visible !important; max-width: 100% !important;
             }
             #preview h1, #preview h2, #preview h3, #preview h4, #preview h5, #preview h6 {
-                page-break-after: avoid !important;
-                page-break-inside: avoid !important;
+                page-break-after: avoid !important; page-break-inside: avoid !important;
             }
             #preview p, #preview ul, #preview ol, #preview table, #preview blockquote, #preview pre {
-                page-break-before: avoid !important;
-                page-break-inside: avoid !important;
+                page-break-before: avoid !important; page-break-inside: avoid !important;
             }
-            #preview * {
-                page-break-after: auto;
-                page-break-inside: avoid;
-            }
-            .pre-copy-btn {
-                display: none !important;
-            }
-            /* Theme-specific backgrounds for children only */
+            #preview * { page-break-after: auto; page-break-inside: avoid; }
+            .pre-copy-btn { display: none !important; }
             #preview blockquote {
-                background-color: #f0f0f0 !important;
-                border-left: 5px solid #ccc !important;
-                color: #222 !important;
+                background-color: var(--blockquote-bg) !important;
+                border-left: 5px solid var(--blockquote-border) !important;
             }
-            .theme-dark #preview blockquote {
-                background-color: #222 !important;
-                border-left: 5px solid #888 !important;
-                color: #aaa !important;
-            }
-            .theme-solarized #preview blockquote {
-                background-color: #eee8d5 !important;
-                border-left: 5px solid #b58900 !important;
-                color: #657b83 !important;
-            }
-            .theme-high-contrast #preview blockquote {
-                background-color: #000 !important;
-                border-left: 5px solid #fff !important;
-                color: #fff !important;
-            }
-            #preview th {
-                background-color: #f0f0f0 !important;
-                color: #222 !important;
-            }
-            .theme-dark #preview th {
-                background-color: #444 !important;
-                color: #eee !important;
-            }
-            .theme-solarized #preview th {
-                background-color: #eee8d5 !important;
-                color: #657b83 !important;
-            }
-            .theme-high-contrast #preview th {
-                background-color: #222 !important;
-                color: #fff !important;
-            }
+            #preview th { background-color: var(--th-bg) !important; color: var(--th-fg) !important; }
         }
-        /* Style for pre block copy button */
+
+        /* Pre copy button */
         .pre-copy-btn {
-            position: absolute;
-            top: 8px;
-            right: 8px;
-            padding: 4px 10px;
-            font-size: 13px;
-            background: #4CAF50;
-            color: #fff;
-            border: none;
-            border-radius: 4px;
-            cursor: pointer;
-            z-index: 2;
-            opacity: 0.8;
-            transition: opacity 0.2s;
+            position: absolute; top: 8px; right: 8px;
+            padding: 4px 10px; font-size: 13px;
+            background: var(--accent); color: #fff;
+            border: none; border-radius: 4px; cursor: pointer;
+            z-index: 2; opacity: 0.8; transition: opacity 0.2s;
         }
-        .pre-copy-btn:hover {
-            opacity: 1;
-        }
+        .pre-copy-btn:hover { opacity: 1; }
     </style>
 </head>
 <body>
 
-    <div class="toolbar">
-        <button id="copy-btn" title="Copy rendered HTML to clipboard">Copy HTML</button>
-        <button id="print-btn" title="Print preview area. For accurate theme colors, enable 'Print backgrounds' or 'Background graphics' in your browser's print dialog.">Print</button>
-        <input id="filename-input" type="text" value="document.md" title="Filename for saving" readonly />
-        <button id="save-btn" title="Save Markdown to file">Save</button>
-        <label for="theme-select">Theme:</label>
-        <select id="theme-select" title="Choose preview theme">
+    <!-- Loading overlay -->
+    <output id="loading-overlay" aria-label="Loading application">
+        <div class="spinner"></div>
+        Loading...
+    </output>
+
+    <!-- TOC panel -->
+    <button id="toc-toggle" title="Toggle Table of Contents" aria-label="Toggle Table of Contents">TOC</button>
+    <nav id="toc-panel" class="collapsed" aria-label="Table of Contents">
+        <strong>Table of Contents</strong>
+        <ul id="toc-list"></ul>
+    </nav>
+
+    <!-- Toast container -->
+    <div id="toast-container" aria-live="polite"></div>
+
+    <div class="toolbar" role="toolbar" aria-label="Editor toolbar">
+        <button id="open-btn" title="Open a .md file (Ctrl+O)" aria-label="Open Markdown file">Open</button>
+        <input type="file" id="open-file-input" accept=".md,.markdown,.txt" hidden tabindex="-1">
+        <button id="copy-btn" title="Copy rendered HTML to clipboard (Ctrl+Shift+C)" aria-label="Copy HTML">Copy HTML</button>
+        <button id="export-html-btn" title="Export preview as standalone HTML file" aria-label="Export HTML">Export HTML</button>
+        <button id="print-btn" title="Print preview (Ctrl+P)" aria-label="Print">Print</button>
+        <input id="filename-input" type="text" value="document.md" title="Filename for saving" aria-label="Filename" readonly>
+        <button id="save-btn" title="Save Markdown to file (Ctrl+S)" aria-label="Save">Save</button>
+        <button id="zen-btn" title="Toggle zen mode (distraction-free)" aria-label="Toggle zen mode">Zen</button>
+        <label for="theme-select" id="theme-label">Theme:</label>
+        <select id="theme-select" title="Choose preview theme" aria-labelledby="theme-label">
             <option value="light">Light</option>
             <option value="dark">Dark</option>
             <option value="solarized">Solarized</option>
             <option value="high-contrast">High Contrast</option>
         </select>
-        <span id="word-count">Words: 0</span>
-        <span id="char-count">Characters: 0</span>
-        <span id="response-time"></span>
     </div>
+
+    <!-- Find & Replace bar -->
+    <div id="find-bar" role="search" aria-label="Find and replace">
+        <input type="text" id="find-input" placeholder="Find..." aria-label="Find text">
+        <button id="find-prev-btn" title="Previous match" aria-label="Previous match">&larr;</button>
+        <button id="find-next-btn" title="Next match" aria-label="Next match">&rarr;</button>
+        <span id="find-count" aria-live="polite"></span>
+        <input type="text" id="replace-input" placeholder="Replace..." aria-label="Replace text">
+        <button id="replace-btn" title="Replace current" aria-label="Replace">Replace</button>
+        <button id="replace-all-btn" title="Replace all" aria-label="Replace all">All</button>
+        <button id="find-close-btn" title="Close find bar" aria-label="Close find bar">&times;</button>
+    </div>
+
     <div class="main-content">
-        <textarea id="markdown-input" placeholder="Write Markdown here..." aria-label="Markdown input"></textarea>
-        <div id="preview" aria-label="Markdown preview"></div>
+        <div class="input-wrapper">
+            <label for="markdown-input" class="sr-only" style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0)">Markdown input</label>
+            <textarea id="markdown-input" placeholder="Write Markdown here..." aria-label="Markdown input"></textarea>
+            <div class="input-stats" aria-live="polite">
+                <span id="word-count" title="Word count">&#9998; 0</span>
+                <span id="char-count" title="Character count">Aa 0</span>
+                <span id="response-time" title="Conversion time">&#9889;</span>
+            </div>
+        </div>
+        <hr id="resizer" aria-label="Resize panels">
+        <section id="preview" aria-label="Markdown preview"></section>
     </div>
+
+    <script>
+    document.addEventListener('DOMContentLoaded', function () {
+        const markdownInput = document.getElementById('markdown-input');
+        const preview = document.getElementById('preview');
+        const copyBtn = document.getElementById('copy-btn');
+        const wordCount = document.getElementById('word-count');
+        const charCount = document.getElementById('char-count');
+        const themeSelect = document.getElementById('theme-select');
+        const printBtn = document.getElementById('print-btn');
+        const responseTime = document.getElementById('response-time');
+        const filenameInput = document.getElementById('filename-input');
+        const saveBtn = document.getElementById('save-btn');
+        const exportHtmlBtn = document.getElementById('export-html-btn');
+        const openBtn = document.getElementById('open-btn');
+        const openFileInput = document.getElementById('open-file-input');
+        const zenBtn = document.getElementById('zen-btn');
+        const tocPanel = document.getElementById('toc-panel');
+        const tocToggle = document.getElementById('toc-toggle');
+        const tocList = document.getElementById('toc-list');
+        const toastContainer = document.getElementById('toast-container');
+        const resizer = document.getElementById('resizer');
+        const findBar = document.getElementById('find-bar');
+        const findInput = document.getElementById('find-input');
+        const replaceInput = document.getElementById('replace-input');
+        const findNextBtn = document.getElementById('find-next-btn');
+        const findPrevBtn = document.getElementById('find-prev-btn');
+        const replaceBtn = document.getElementById('replace-btn');
+        const replaceAllBtn = document.getElementById('replace-all-btn');
+        const findCloseBtn = document.getElementById('find-close-btn');
+        const findCount = document.getElementById('find-count');
+        const loadingOverlay = document.getElementById('loading-overlay');
+
+        // --- Toast notification system ---
+        function showToast(message, duration = 2000) {
+            const toast = document.createElement('div');
+            toast.className = 'toast';
+            toast.textContent = message;
+            toastContainer.appendChild(toast);
+            requestAnimationFrame(function() { toast.classList.add('show'); });
+            setTimeout(function() {
+                toast.classList.remove('show');
+                setTimeout(function() { toast.remove(); }, 300);
+            }, duration);
+        }
+
+        // --- Undo history ---
+        const undoStack = [];
+        const redoStack = [];
+        let lastSnapshot = '';
+        function pushUndo() {
+            const val = markdownInput.value;
+            if (val !== lastSnapshot) {
+                undoStack.push(lastSnapshot);
+                if (undoStack.length > 100) undoStack.shift();
+                redoStack.length = 0;
+                lastSnapshot = val;
+            }
+        }
+        function performUndo() {
+            if (undoStack.length === 0) return;
+            redoStack.push(markdownInput.value);
+            markdownInput.value = undoStack.pop();
+            lastSnapshot = markdownInput.value;
+            renderMarkdown();
+        }
+        function performRedo() {
+            if (redoStack.length === 0) return;
+            undoStack.push(markdownInput.value);
+            markdownInput.value = redoStack.pop();
+            lastSnapshot = markdownInput.value;
+            renderMarkdown();
+        }
+
+        // Debounce rendering
+        let renderTimeout;
+        function debounceRenderMarkdown() {
+            clearTimeout(renderTimeout);
+            renderTimeout = setTimeout(function() {
+                pushUndo();
+                renderMarkdown();
+            }, 200);
+        }
+
+        // Load from localStorage
+        if (localStorage.getItem('markdownInput')) {
+            markdownInput.value = localStorage.getItem('markdownInput');
+        }
+        lastSnapshot = markdownInput.value;
+        if (localStorage.getItem('markdownFilename')) {
+            filenameInput.value = localStorage.getItem('markdownFilename');
+        }
+
+        // Override marked renderer to add copy buttons to pre blocks
+        const renderer = new marked.Renderer();
+        renderer.code = function(args) {
+            const text = typeof args === 'string' ? args : args.text;
+            const lang = typeof args === 'string' ? arguments[1] : args.lang;
+            const escaped = text
+                .replaceAll('&', '&amp;')
+                .replaceAll('<', '&lt;')
+                .replaceAll('>', '&gt;')
+                .replaceAll('"', '&quot;');
+            const langClass = lang ? ' class="language-' + lang + '"' : '';
+            return '<pre style="position:relative"><button class="pre-copy-btn" title="Copy code to clipboard">Copy</button><code' + langClass + '>' + escaped + '</code></pre>';
+        };
+        marked.setOptions({ renderer: renderer });
+
+        // Render Markdown
+        function renderMarkdown() {
+            const start = performance.now();
+            const markdownText = markdownInput.value;
+            localStorage.setItem('markdownInput', markdownText);
+            const htmlContent = marked.parse(markdownText);
+            preview.innerHTML = DOMPurify.sanitize(htmlContent);
+
+            // Syntax highlight
+            preview.querySelectorAll('pre code').forEach(function(block) {
+                globalThis.hljs.highlightElement(block);
+            });
+
+            updateCounts(markdownText);
+            buildTOC();
+            const end = performance.now();
+            responseTime.textContent = '\u26A1 ' + (end - start).toFixed(2) + 'ms';
+        }
+
+        // Event delegation for code block copy buttons
+        preview.addEventListener('click', function(e) {
+            if (e.target.classList.contains('pre-copy-btn')) {
+                e.stopPropagation();
+                const pre = e.target.closest('pre');
+                const code = pre && pre.querySelector('code');
+                if (code) {
+                    navigator.clipboard.writeText(code.textContent).then(function() {
+                        e.target.textContent = 'Copied!';
+                        setTimeout(function() { e.target.textContent = 'Copy'; }, 1200);
+                    });
+                }
+            }
+        });
+
+        // Update word/char count
+        function updateCounts(text) {
+            const words = text.trim().split(/\s+/).filter(Boolean);
+            wordCount.textContent = '\u270E ' + words.length;
+            charCount.textContent = 'Aa ' + text.length;
+        }
+
+        // --- Build Table of Contents ---
+        function buildTOC() {
+            const headings = preview.querySelectorAll('h1, h2, h3, h4, h5, h6');
+            tocList.innerHTML = '';
+            headings.forEach(function(h, i) {
+                const id = 'toc-heading-' + i;
+                h.id = id;
+                const li = document.createElement('li');
+                li.className = 'toc-level-' + h.tagName.toLowerCase();
+                const a = document.createElement('a');
+                a.href = '#' + id;
+                a.textContent = h.textContent;
+                a.addEventListener('click', function(ev) {
+                    ev.preventDefault();
+                    h.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                });
+                li.appendChild(a);
+                tocList.appendChild(li);
+            });
+        }
+
+        // TOC toggle
+        tocToggle.addEventListener('click', function() {
+            tocPanel.classList.toggle('collapsed');
+        });
+
+        // Event listener for real-time rendering (debounced)
+        markdownInput.addEventListener('input', debounceRenderMarkdown);
+
+        // Initial render
+        renderMarkdown();
+
+        // Copy HTML button
+        copyBtn.addEventListener('click', function() {
+            navigator.clipboard.writeText(preview.innerHTML)
+                .then(function() { showToast('HTML copied to clipboard'); })
+                .catch(function() { showToast('Copy failed'); });
+        });
+
+        // Theme selection
+        function setTheme(theme) {
+            document.body.classList.remove('theme-light', 'theme-dark', 'theme-solarized', 'theme-high-contrast');
+            document.body.classList.add('theme-' + theme);
+            localStorage.setItem('theme', theme);
+        }
+        themeSelect.addEventListener('change', function() {
+            setTheme(themeSelect.value);
+        });
+        const savedTheme = localStorage.getItem('theme') || 'light';
+        themeSelect.value = savedTheme;
+        setTheme(savedTheme);
+
+        // Print button (fix: use afterprint event to remove class reliably)
+        printBtn.addEventListener('click', function() {
+            const themeClass = Array.from(document.body.classList).find(function(c) { return c.startsWith('theme-'); });
+            document.documentElement.classList.add(themeClass);
+            function cleanup() {
+                document.documentElement.classList.remove(themeClass);
+                globalThis.removeEventListener('afterprint', cleanup);
+            }
+            globalThis.addEventListener('afterprint', cleanup);
+            globalThis.print();
+        });
+
+        // Filename input
+        filenameInput.addEventListener('click', function() {
+            filenameInput.readOnly = false;
+            filenameInput.focus();
+        });
+        filenameInput.addEventListener('blur', function() {
+            filenameInput.readOnly = true;
+            localStorage.setItem('markdownFilename', filenameInput.value);
+        });
+        filenameInput.addEventListener('keydown', function(e) {
+            if (e.key === 'Enter') {
+                filenameInput.readOnly = true;
+                localStorage.setItem('markdownFilename', filenameInput.value);
+                saveBtn.focus();
+            }
+        });
+
+        // Save Markdown to file
+        saveBtn.addEventListener('click', function() {
+            let filename = filenameInput.value.trim();
+            if (!filename) filename = 'document.md';
+            if (!filename.endsWith('.md')) filename += '.md';
+            const blob = new Blob([markdownInput.value], { type: 'text/markdown' });
+            const a = document.createElement('a');
+            a.href = URL.createObjectURL(blob);
+            a.download = filename;
+            document.body.appendChild(a);
+            a.click();
+            setTimeout(function() {
+                a.remove();
+                URL.revokeObjectURL(a.href);
+            }, 100);
+            showToast('File saved: ' + filename);
+        });
+
+        // Export rendered HTML as standalone file
+        exportHtmlBtn.addEventListener('click', function() {
+            const html = '<!DOCTYPE html>\n<html><head><meta charset="UTF-8"><title>Exported</title>\n' +
+                '<style>body{font-family:"Segoe UI",sans-serif;max-width:900px;margin:40px auto;padding:20px;line-height:1.6}' +
+                'pre{background:#f5f5f5;padding:16px;border-radius:6px;overflow-x:auto}' +
+                'code{font-family:monospace}table{border-collapse:collapse;width:100%}' +
+                'th,td{border:1px solid #ddd;padding:8px;text-align:left}th{background:#f0f0f0}' +
+                'blockquote{border-left:4px solid #ccc;margin:0;padding:4px 16px;background:#f9f9f9}</style>\n' +
+                '</head><body>' + preview.innerHTML + '</body></html>';
+            const blob = new Blob([html], { type: 'text/html' });
+            const a = document.createElement('a');
+            a.href = URL.createObjectURL(blob);
+            a.download = (filenameInput.value.replace(/\.md$/, '') || 'document') + '.html';
+            document.body.appendChild(a);
+            a.click();
+            setTimeout(function() {
+                a.remove();
+                URL.revokeObjectURL(a.href);
+            }, 100);
+            showToast('HTML exported');
+        });
+
+        // Open .md file
+        openBtn.addEventListener('click', function() { openFileInput.click(); });
+        openFileInput.addEventListener('change', function() {
+            const file = openFileInput.files[0];
+            if (!file) return;
+            file.text().then(function(text) {
+                markdownInput.value = text;
+                filenameInput.value = file.name;
+                localStorage.setItem('markdownFilename', file.name);
+                pushUndo();
+                renderMarkdown();
+                showToast('Opened: ' + file.name);
+            });
+            openFileInput.value = '';
+        });
+
+        // Zen mode
+        zenBtn.addEventListener('click', function() {
+            document.body.classList.toggle('zen-mode');
+            zenBtn.textContent = document.body.classList.contains('zen-mode') ? 'Exit Zen' : 'Zen';
+        });
+
+        // --- Split pane resizer ---
+        let isResizing = false;
+        resizer.addEventListener('mousedown', function(e) {
+            isResizing = true;
+            document.body.style.cursor = 'col-resize';
+            document.body.style.userSelect = 'none';
+            e.preventDefault();
+        });
+        document.addEventListener('mousemove', function(e) {
+            if (!isResizing) return;
+            const container = document.querySelector('.main-content');
+            const rect = container.getBoundingClientRect();
+            const offset = e.clientX - rect.left;
+            const pct = Math.min(Math.max((offset / rect.width) * 100, 15), 85);
+            const inputWrapper = markdownInput.closest('.input-wrapper');
+            inputWrapper.style.flex = '0 0 ' + pct + '%';
+            preview.style.flex = '0 0 ' + (100 - pct - 0.5) + '%';
+        });
+        document.addEventListener('mouseup', function() {
+            if (isResizing) {
+                isResizing = false;
+                document.body.style.cursor = '';
+                document.body.style.userSelect = '';
+            }
+        });
+
+        // --- Scroll sync ---
+        markdownInput.addEventListener('scroll', function() {
+            const ratio = markdownInput.scrollTop / (markdownInput.scrollHeight - markdownInput.clientHeight || 1);
+            preview.scrollTop = ratio * (preview.scrollHeight - preview.clientHeight);
+        });
+
+        // --- Tab key support ---
+        markdownInput.addEventListener('keydown', function(e) {
+            if (e.key === 'Tab') {
+                e.preventDefault();
+                const start = this.selectionStart;
+                const end = this.selectionEnd;
+                this.value = this.value.substring(0, start) + '    ' + this.value.substring(end);
+                this.selectionStart = this.selectionEnd = start + 4;
+                debounceRenderMarkdown();
+            }
+        });
+
+        // --- Drag and drop images ---
+        markdownInput.addEventListener('dragover', function(e) {
+            e.preventDefault();
+            markdownInput.classList.add('drag-over');
+        });
+        markdownInput.addEventListener('dragleave', function() {
+            markdownInput.classList.remove('drag-over');
+        });
+        markdownInput.addEventListener('drop', function(e) {
+            e.preventDefault();
+            markdownInput.classList.remove('drag-over');
+            const files = e.dataTransfer.files;
+            for (const file of files) {
+                if (!file.type.startsWith('image/')) continue;
+                const reader = new FileReader();
+                reader.onload = function(ev) {
+                    const dataUri = ev.target.result;
+                    const mdImg = '![' + file.name + '](' + dataUri + ')\n';
+                    const pos = markdownInput.selectionStart;
+                    markdownInput.value = markdownInput.value.substring(0, pos) + mdImg + markdownInput.value.substring(pos);
+                    pushUndo();
+                    renderMarkdown();
+                    showToast('Image inserted: ' + file.name);
+                };
+                reader.readAsDataURL(file);
+            }
+        });
+
+        // --- Paste images ---
+        markdownInput.addEventListener('paste', function(e) {
+            const items = e.clipboardData && e.clipboardData.items;
+            if (!items) return;
+            for (const item of items) {
+                if (!item.type.startsWith('image/')) continue;
+                e.preventDefault();
+                const file = item.getAsFile();
+                const reader = new FileReader();
+                reader.onload = function(ev) {
+                    const dataUri = ev.target.result;
+                    const mdImg = '![pasted-image](' + dataUri + ')\n';
+                    const pos = markdownInput.selectionStart;
+                    markdownInput.value = markdownInput.value.substring(0, pos) + mdImg + markdownInput.value.substring(pos);
+                    pushUndo();
+                    renderMarkdown();
+                    showToast('Image pasted');
+                };
+                reader.readAsDataURL(file);
+            }
+        });
+
+        // --- Find & Replace ---
+        let findMatches = [];
+        let findIndex = -1;
+
+        function openFindBar() {
+            findBar.classList.add('visible');
+            findInput.focus();
+        }
+        function closeFindBar() {
+            findBar.classList.remove('visible');
+            findMatches = [];
+            findIndex = -1;
+            findCount.textContent = '';
+        }
+        findCloseBtn.addEventListener('click', closeFindBar);
+
+        function doFind() {
+            const query = findInput.value;
+            if (!query) { findMatches = []; findIndex = -1; findCount.textContent = ''; return; }
+            const text = markdownInput.value;
+            findMatches = [];
+            let idx = text.indexOf(query);
+            while (idx !== -1) {
+                findMatches.push(idx);
+                idx = text.indexOf(query, idx + 1);
+            }
+            findCount.textContent = findMatches.length + ' found';
+            if (findMatches.length > 0) {
+                findIndex = 0;
+                highlightFindMatch();
+            }
+        }
+        function highlightFindMatch() {
+            if (findIndex < 0 || findIndex >= findMatches.length) return;
+            const pos = findMatches[findIndex];
+            markdownInput.focus();
+            markdownInput.setSelectionRange(pos, pos + findInput.value.length);
+            findCount.textContent = (findIndex + 1) + '/' + findMatches.length;
+        }
+        findInput.addEventListener('input', doFind);
+        findNextBtn.addEventListener('click', function() {
+            if (findMatches.length === 0) return;
+            findIndex = (findIndex + 1) % findMatches.length;
+            highlightFindMatch();
+        });
+        findPrevBtn.addEventListener('click', function() {
+            if (findMatches.length === 0) return;
+            findIndex = (findIndex - 1 + findMatches.length) % findMatches.length;
+            highlightFindMatch();
+        });
+        replaceBtn.addEventListener('click', function() {
+            if (findMatches.length === 0 || findIndex < 0) return;
+            const pos = findMatches[findIndex];
+            const query = findInput.value;
+            const repl = replaceInput.value;
+            pushUndo();
+            markdownInput.value = markdownInput.value.substring(0, pos) + repl + markdownInput.value.substring(pos + query.length);
+            renderMarkdown();
+            doFind();
+        });
+        replaceAllBtn.addEventListener('click', function() {
+            const query = findInput.value;
+            if (!query) return;
+            pushUndo();
+            markdownInput.value = markdownInput.value.split(query).join(replaceInput.value);
+            renderMarkdown();
+            doFind();
+            showToast('All replaced');
+        });
+
+        // --- Keyboard shortcuts ---
+        const shortcutMap = {
+            's': function() { saveBtn.click(); },
+            'p': function() { printBtn.click(); },
+            'f': function() { openFindBar(); },
+            'h': function() { openFindBar(); replaceInput.focus(); }
+        };
+        function handleCtrlShortcuts(e) {
+            if (!e.ctrlKey) return;
+            if (e.shiftKey && e.key === 'C') {
+                e.preventDefault();
+                copyBtn.click();
+                return;
+            }
+            const action = shortcutMap[e.key];
+            if (action) {
+                e.preventDefault();
+                action();
+                return;
+            }
+            if (document.activeElement !== markdownInput) return;
+            if (!e.shiftKey && e.key === 'z') {
+                e.preventDefault();
+                performUndo();
+            } else if ((e.shiftKey && e.key === 'Z') || e.key === 'y') {
+                e.preventDefault();
+                performRedo();
+            }
+        }
+        document.addEventListener('keydown', function(e) {
+            handleCtrlShortcuts(e);
+            if (e.key === 'Escape') {
+                closeFindBar();
+            }
+        });
+
+        // --- Hide loading overlay once ready ---
+        loadingOverlay.style.display = 'none';
+    });
+    </script>
 
 </body>
 </html>

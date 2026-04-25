@@ -54,7 +54,7 @@ function parseDurationMs(input, defaultMs = 0) {
   if (/^\d+$/.test(text)) {
     return Number(text);
   }
-  const m = text.match(/^(\d+)(ms|s|m|h)$/);
+  const m = /^(\d+)(ms|s|m|h)$/.exec(text);
   if (!m) {
     return defaultMs;
   }
@@ -66,6 +66,43 @@ function parseDurationMs(input, defaultMs = 0) {
   if (unit === 'h') return value * 3_600_000;
   return defaultMs;
 }
+
+const ARG_VALUE_PARSERS = {
+  '--host':             (v, o) => { o.hosts = v; },
+  '--port':             (v, o) => { o.port = parseNumber(v, o.port); },
+  '--username':         (v, o) => { o.username = v; },
+  '--password':         (v, o) => { o.password = v; },
+  '--queue':            (v, o) => { o.queue = v; },
+  '--topic':            (v, o) => { o.topic = v; },
+  '--vhost':            (v, o) => { o.vhost = v; },
+  '--subscription-id':  (v, o) => { o.subscriptionId = v; },
+  '--ack-mode':         (v, o) => { o.ackMode = v; },
+  '--output':           (v, o) => { o.output = v; },
+  '--max-messages':     (v, o) => { o.maxMessages = parseNumber(v, o.maxMessages); },
+  '--duration':         (v, o) => { o.durationMs = parseDurationMs(v, o.durationMs); },
+  '--stats-interval':   (v, o) => { o.statsIntervalMs = parseDurationMs(v, o.statsIntervalMs); },
+  '--exclude-fields':   (v, o) => { o.excludeFields = v; },
+  '--reconnect-delay':  (v, o) => { o.reconnectDelayMs = parseDurationMs(v, o.reconnectDelayMs); },
+  '--heartbeat-out':    (v, o) => { o.heartbeatOutgoingMs = parseNumber(v, o.heartbeatOutgoingMs); },
+  '--heartbeat-in':     (v, o) => { o.heartbeatIncomingMs = parseNumber(v, o.heartbeatIncomingMs); },
+};
+
+const ARG_FLAGS = {
+  '--help':         (o) => { o.help = true; },
+  '-h':             (o) => { o.help = true; },
+  '--tls':          (o) => { o.tls = true; },
+  '--no-tls':       (o) => { o.tls = false; },
+  '--dry-run':      (o) => { o.dryRun = true; },
+  '--no-pretty':    (o) => { o.pretty = false; },
+  '--pretty':       (o) => { o.pretty = true; },
+  '--stats':        (o) => { o.stats = true; },
+  '--no-stats':     (o) => { o.stats = false; },
+  '--quiet':        (o) => { o.quiet = true; },
+  '--verbose':      (o) => { o.verbose = true; },
+  '--no-color':     (o) => { o.noColor = true; },
+  '--reconnect':    (o) => { o.reconnect = true; },
+  '--no-reconnect': (o) => { o.reconnect = false; },
+};
 
 function parseArgs(argv) {
   const options = {
@@ -99,142 +136,18 @@ function parseArgs(argv) {
 
   for (let i = 0; i < argv.length; i += 1) {
     const arg = argv[i];
-    const next = argv[i + 1];
 
-    if (arg === '--help' || arg === '-h') {
-      options.help = true;
+    const flagHandler = ARG_FLAGS[arg];
+    if (flagHandler) {
+      flagHandler(options);
       continue;
     }
-    if (arg === '--host' && next) {
-      options.hosts = next;
-      i += 1;
-      continue;
-    }
-    if (arg === '--port' && next) {
-      options.port = parseNumber(next, options.port);
-      i += 1;
-      continue;
-    }
-    if (arg === '--tls') {
-      options.tls = true;
-      continue;
-    }
-    if (arg === '--no-tls') {
-      options.tls = false;
-      continue;
-    }
-    if (arg === '--username' && next) {
-      options.username = next;
-      i += 1;
-      continue;
-    }
-    if (arg === '--password' && next) {
-      options.password = next;
-      i += 1;
-      continue;
-    }
-    if (arg === '--queue' && next) {
-      options.queue = next;
-      i += 1;
-      continue;
-    }
-    if (arg === '--topic' && next) {
-      options.topic = next;
-      i += 1;
-      continue;
-    }
-    if (arg === '--vhost' && next) {
-      options.vhost = next;
-      i += 1;
-      continue;
-    }
-    if (arg === '--subscription-id' && next) {
-      options.subscriptionId = next;
-      i += 1;
-      continue;
-    }
-    if (arg === '--ack-mode' && next) {
-      options.ackMode = next;
-      i += 1;
-      continue;
-    }
-    if (arg === '--output' && next) {
-      options.output = next;
-      i += 1;
-      continue;
-    }
-    if (arg === '--max-messages' && next) {
-      options.maxMessages = parseNumber(next, options.maxMessages);
-      i += 1;
-      continue;
-    }
-    if (arg === '--duration' && next) {
-      options.durationMs = parseDurationMs(next, options.durationMs);
-      i += 1;
-      continue;
-    }
-    if (arg === '--dry-run') {
-      options.dryRun = true;
-      continue;
-    }
-    if (arg === '--no-pretty') {
-      options.pretty = false;
-      continue;
-    }
-    if (arg === '--pretty') {
-      options.pretty = true;
-      continue;
-    }
-    if (arg === '--stats') {
-      options.stats = true;
-      continue;
-    }
-    if (arg === '--no-stats') {
-      options.stats = false;
-      continue;
-    }
-    if (arg === '--stats-interval' && next) {
-      options.statsIntervalMs = parseDurationMs(next, options.statsIntervalMs);
-      i += 1;
-      continue;
-    }
-    if (arg === '--exclude-fields' && next) {
-      options.excludeFields = next;
-      i += 1;
-      continue;
-    }
-    if (arg === '--quiet') {
-      options.quiet = true;
-      continue;
-    }
-    if (arg === '--verbose') {
-      options.verbose = true;
-      continue;
-    }
-    if (arg === '--no-color') {
-      options.noColor = true;
-      continue;
-    }
-    if (arg === '--reconnect') {
-      options.reconnect = true;
-      continue;
-    }
-    if (arg === '--no-reconnect') {
-      options.reconnect = false;
-      continue;
-    }
-    if (arg === '--reconnect-delay' && next) {
-      options.reconnectDelayMs = parseDurationMs(next, options.reconnectDelayMs);
-      i += 1;
-      continue;
-    }
-    if (arg === '--heartbeat-out' && next) {
-      options.heartbeatOutgoingMs = parseNumber(next, options.heartbeatOutgoingMs);
-      i += 1;
-      continue;
-    }
-    if (arg === '--heartbeat-in' && next) {
-      options.heartbeatIncomingMs = parseNumber(next, options.heartbeatIncomingMs);
+
+    const valueHandler = ARG_VALUE_PARSERS[arg];
+    if (valueHandler) {
+      const next = argv[i + 1];
+      if (!next) throw new Error(`Unknown or incomplete argument: ${arg}`);
+      valueHandler(next, options);
       i += 1;
       continue;
     }
@@ -321,16 +234,16 @@ function buildWorkerTargets(options) {
   return targets;
 }
 
+function ts() {
+  return new Date().toISOString();
+}
+
 function createLogger(options) {
   const useColor = !options.noColor && process.stdout.isTTY;
 
   function paint(color, msg) {
     if (!useColor) return msg;
     return `${color}${msg}${COLORS.reset}`;
-  }
-
-  function ts() {
-    return new Date().toISOString();
   }
 
   return {
@@ -373,7 +286,7 @@ class LineWriter {
 
   async writeLine(line) {
     await this.readyPromise;
-    const text = String(line).replace(/\r?\n/g, ' ');
+    const text = String(line).replaceAll(/\r?\n/g, ' ');
     const ok = this.stream.write(`${text}\n`);
     if (ok) {
       return;
@@ -416,76 +329,81 @@ class StompCodec {
     return this.extractFrames();
   }
 
+  skipLeadingNewlines() {
+    while (this.buffer.length > 0 && (this.buffer[0] === 0x0a || this.buffer[0] === 0x0d)) {
+      this.buffer = this.buffer.slice(1);
+    }
+  }
+
+  parseCommand() {
+    const cmdEnd = this.buffer.indexOf(0x0a);
+    if (cmdEnd < 0) return null;
+    return { command: this.buffer.slice(0, cmdEnd).toString('utf8').replace(/\r$/, ''), cmdEnd };
+  }
+
+  parseHeaders(cmdEnd) {
+    const headersMarker = indexOfHeadersEnd(this.buffer, cmdEnd + 1);
+    if (!headersMarker) return null;
+
+    const headersRaw = this.buffer
+      .slice(cmdEnd + 1, headersMarker.index)
+      .toString('utf8')
+      .split('\n')
+      .map((line) => line.replace(/\r$/, ''))
+      .filter(Boolean);
+
+    const headers = {};
+    for (const line of headersRaw) {
+      const idx = line.indexOf(':');
+      if (idx >= 0) {
+        headers[line.slice(0, idx)] = line.slice(idx + 1);
+      }
+    }
+    return { headers, bodyStart: headersMarker.index + headersMarker.length };
+  }
+
+  parseBodyWithLength(bodyStart, contentLengthText) {
+    const contentLength = Number(contentLengthText);
+    if (!Number.isFinite(contentLength) || contentLength < 0) {
+      throw new Error(`Invalid content-length: ${contentLengthText}`);
+    }
+    if (this.buffer.length < bodyStart + contentLength + 1) {
+      return null;
+    }
+    const body = this.buffer.slice(bodyStart, bodyStart + contentLength);
+    if (this.buffer[bodyStart + contentLength] !== 0x00) {
+      throw new Error('Malformed STOMP frame: missing null terminator after content-length body');
+    }
+    return { body, frameEnd: bodyStart + contentLength + 1 };
+  }
+
+  parseBodyUntilNull(bodyStart) {
+    const nullIndex = this.buffer.indexOf(0x00, bodyStart);
+    if (nullIndex < 0) return null;
+    return { body: this.buffer.slice(bodyStart, nullIndex), frameEnd: nullIndex + 1 };
+  }
+
   extractFrames() {
     const frames = [];
 
     while (this.buffer.length > 0) {
-      while (this.buffer.length > 0 && (this.buffer[0] === 0x0a || this.buffer[0] === 0x0d)) {
-        this.buffer = this.buffer.slice(1);
-      }
-      if (this.buffer.length === 0) {
-        break;
-      }
+      this.skipLeadingNewlines();
+      if (this.buffer.length === 0) break;
 
-      const cmdEnd = this.buffer.indexOf(0x0a);
-      if (cmdEnd < 0) {
-        break;
-      }
+      const cmdResult = this.parseCommand();
+      if (!cmdResult) break;
 
-      const command = this.buffer.slice(0, cmdEnd).toString('utf8').replace(/\r$/, '');
-      const headersMarker = indexOfHeadersEnd(this.buffer, cmdEnd + 1);
-      if (!headersMarker) {
-        break;
-      }
+      const headerResult = this.parseHeaders(cmdResult.cmdEnd);
+      if (!headerResult) break;
 
-      const headersRaw = this.buffer
-        .slice(cmdEnd + 1, headersMarker.index)
-        .toString('utf8')
-        .split('\n')
-        .map((line) => line.replace(/\r$/, ''))
-        .filter(Boolean);
+      const contentLengthText = headerResult.headers['content-length'];
+      const bodyResult = contentLengthText === undefined
+        ? this.parseBodyUntilNull(headerResult.bodyStart)
+        : this.parseBodyWithLength(headerResult.bodyStart, contentLengthText);
+      if (!bodyResult) break;
 
-      const headers = {};
-      for (const line of headersRaw) {
-        const idx = line.indexOf(':');
-        if (idx < 0) {
-          continue;
-        }
-        const key = line.slice(0, idx);
-        const value = line.slice(idx + 1);
-        headers[key] = value;
-      }
-
-      const bodyStart = headersMarker.index + headersMarker.length;
-      let body;
-      let frameEnd;
-
-      const contentLengthText = headers['content-length'];
-      if (contentLengthText !== undefined) {
-        const contentLength = Number(contentLengthText);
-        if (!Number.isFinite(contentLength) || contentLength < 0) {
-          throw new Error(`Invalid content-length: ${contentLengthText}`);
-        }
-        if (this.buffer.length < bodyStart + contentLength + 1) {
-          break;
-        }
-        body = this.buffer.slice(bodyStart, bodyStart + contentLength);
-        const nullByte = this.buffer[bodyStart + contentLength];
-        if (nullByte !== 0x00) {
-          throw new Error('Malformed STOMP frame: missing null terminator after content-length body');
-        }
-        frameEnd = bodyStart + contentLength + 1;
-      } else {
-        const nullIndex = this.buffer.indexOf(0x00, bodyStart);
-        if (nullIndex < 0) {
-          break;
-        }
-        body = this.buffer.slice(bodyStart, nullIndex);
-        frameEnd = nullIndex + 1;
-      }
-
-      frames.push({ command, headers, body });
-      this.buffer = this.buffer.slice(frameEnd);
+      frames.push({ command: cmdResult.command, headers: headerResult.headers, body: bodyResult.body });
+      this.buffer = this.buffer.slice(bodyResult.frameEnd);
     }
 
     return frames;
@@ -546,6 +464,11 @@ function filterTopLevelFields(value, excluded) {
     }
   }
   return out;
+}
+
+function formatJsonPayload(json, pretty) {
+  if (pretty) return json;
+  return JSON.stringify(json);
 }
 
 function isLikelyBinaryPayload(buffer, headers) {
@@ -727,7 +650,7 @@ async function runConnectionLoop(options, logger) {
 
       payload = parsedJson === null
         ? decoded.text
-        : (options.pretty ? parsedJson : JSON.stringify(parsedJson));
+        : formatJsonPayload(parsedJson, options.pretty);
     }
 
     const outputRecord = {
@@ -749,6 +672,11 @@ async function runConnectionLoop(options, logger) {
     }
 
     stats.messagesProcessed += 1;
+  }
+
+  function handleMessageError(err) {
+    stats.errors += 1;
+    logger.error(`Message processing error: ${err.message}`);
   }
 
   async function connectAndConsume(target) {
@@ -816,6 +744,10 @@ async function runConnectionLoop(options, logger) {
         }
       }
 
+      function onHeartbeatTimeout() {
+        fail(new Error(`Heartbeat timeout after ${incomingHeartbeatMs}ms`));
+      }
+
       function resetIncomingHeartbeatTimer() {
         if (!incomingHeartbeatMs || incomingHeartbeatMs <= 0) {
           return;
@@ -823,14 +755,63 @@ async function runConnectionLoop(options, logger) {
         if (incomingHeartbeatTimer) {
           clearTimeout(incomingHeartbeatTimer);
         }
-        incomingHeartbeatTimer = setTimeout(() => {
-          fail(new Error(`Heartbeat timeout after ${incomingHeartbeatMs}ms`));
-        }, Math.max(incomingHeartbeatMs * 2, 1000));
+        incomingHeartbeatTimer = setTimeout(onHeartbeatTimeout, Math.max(incomingHeartbeatMs * 2, 1000));
       }
 
       function sendFrame(command, headers = {}, body = '') {
         const frame = serializeFrame(command, headers, body);
         socket.write(frame);
+      }
+
+      function sendOutgoingHeartbeat() {
+        if (!socket.destroyed) {
+          socket.write('\n');
+        }
+      }
+
+      function handleConnectedFrame(frame) {
+        connected = true;
+        const hb = String(frame.headers['heart-beat'] || '0,0').split(',');
+        const sx = Number(hb[0]) || 0;
+        const sy = Number(hb[1]) || 0;
+
+        // STOMP 1.2 negotiation:
+        // incoming from server: max(client desired receive, server can send), if both non-zero.
+        // outgoing to server: max(client can send, server desired receive), if both non-zero.
+        incomingHeartbeatMs = options.heartbeatIncomingMs > 0 && sx > 0
+          ? Math.max(options.heartbeatIncomingMs, sx)
+          : 0;
+        const outgoingHeartbeatMs = options.heartbeatOutgoingMs > 0 && sy > 0
+          ? Math.max(options.heartbeatOutgoingMs, sy)
+          : 0;
+
+        if (outgoingHeartbeatMs > 0) {
+          outgoingHeartbeatTimer = setInterval(sendOutgoingHeartbeat, outgoingHeartbeatMs);
+        }
+
+        resetIncomingHeartbeatTimer();
+
+        logger.info(`STOMP connected (version=${frame.headers.version || 'unknown'})`);
+        logger.debug(`Heartbeat negotiated incoming=${incomingHeartbeatMs}ms outgoing=${outgoingHeartbeatMs}ms`);
+        sendFrame('SUBSCRIBE', {
+          id: options.subscriptionId,
+          destination: target.destination,
+          ack: options.ackMode
+        });
+        logger.info(`Subscribed to ${target.label} with ack mode ${options.ackMode}`);
+      }
+
+      async function processMessageAsync(msgFrame) {
+        await onMessage(msgFrame, sendFrame, target.destination);
+        if (shouldStop()) {
+          cleanup('max-messages');
+        }
+      }
+
+      function processMessage(msgFrame) {
+        messageQueue = messageQueue
+          .then(processMessageAsync.bind(null, msgFrame))
+          .catch(handleMessageError);
       }
 
       socket.setNoDelay(true);
@@ -864,54 +845,12 @@ async function runConnectionLoop(options, logger) {
           }
 
           if (frame.command === 'CONNECTED') {
-            connected = true;
-            const hb = String(frame.headers['heart-beat'] || '0,0').split(',');
-            const sx = Number(hb[0]) || 0;
-            const sy = Number(hb[1]) || 0;
-
-            // STOMP 1.2 negotiation:
-            // incoming from server: max(client desired receive, server can send), if both non-zero.
-            // outgoing to server: max(client can send, server desired receive), if both non-zero.
-            incomingHeartbeatMs = options.heartbeatIncomingMs > 0 && sx > 0
-              ? Math.max(options.heartbeatIncomingMs, sx)
-              : 0;
-            const outgoingHeartbeatMs = options.heartbeatOutgoingMs > 0 && sy > 0
-              ? Math.max(options.heartbeatOutgoingMs, sy)
-              : 0;
-
-            if (outgoingHeartbeatMs > 0) {
-              outgoingHeartbeatTimer = setInterval(() => {
-                if (!socket.destroyed) {
-                  socket.write('\n');
-                }
-              }, outgoingHeartbeatMs);
-            }
-
-            resetIncomingHeartbeatTimer();
-
-            logger.info(`STOMP connected (version=${frame.headers.version || 'unknown'})`);
-            logger.debug(`Heartbeat negotiated incoming=${incomingHeartbeatMs}ms outgoing=${outgoingHeartbeatMs}ms`);
-            sendFrame('SUBSCRIBE', {
-              id: options.subscriptionId,
-              destination: target.destination,
-              ack: options.ackMode
-            });
-            logger.info(`Subscribed to ${target.label} with ack mode ${options.ackMode}`);
+            handleConnectedFrame(frame);
             continue;
           }
 
           if (frame.command === 'MESSAGE') {
-            messageQueue = messageQueue
-              .then(async () => {
-                await onMessage(frame, sendFrame, target.destination);
-                if (shouldStop()) {
-                  cleanup('max-messages');
-                }
-              })
-              .catch((err) => {
-                stats.errors += 1;
-                logger.error(`Message processing error: ${err.message}`);
-              });
+            processMessage(frame);
             continue;
           }
 
@@ -1028,29 +967,33 @@ async function runConnectionLoop(options, logger) {
   }
 }
 
-async function main() {
-  let options;
-  try {
-    options = parseArgs(process.argv.slice(2));
-  } catch (err) {
-    console.error(`Argument error: ${err.message}`);
-    usage();
-    process.exitCode = 1;
-    return;
-  }
+// Top-level entry point
+let options;
+let startupOk = true;
+try {
+  options = parseArgs(process.argv.slice(2));
+} catch (err) {
+  console.error(`Argument error: ${err.message}`);
+  usage();
+  process.exitCode = 1;
+  startupOk = false;
+}
 
-  if (options.help) {
-    usage();
-    return;
-  }
+if (startupOk && options.help) {
+  usage();
+  startupOk = false;
+}
 
+if (startupOk) {
   const validAckModes = new Set(['auto', 'client', 'client-individual']);
   if (!validAckModes.has(options.ackMode)) {
     console.error('Invalid --ack-mode. Allowed: auto, client, client-individual');
     process.exitCode = 1;
-    return;
+    startupOk = false;
   }
+}
 
+if (startupOk) {
   const logger = createLogger(options);
 
   try {
@@ -1060,5 +1003,3 @@ async function main() {
     process.exitCode = 1;
   }
 }
-
-main();
