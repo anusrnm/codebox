@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <meta name="theme-color" content="#111827" />
-  <title>Language Flashcards</title>
+  <title>Flashcards</title>
   <link
     rel="icon"
     type="image/png"
@@ -16,21 +16,19 @@
 <body>
   <div class="app">
     <header class="app-header">
-      <h1>Language Flashcards</h1>
+      <h1>Flashcards</h1>
       <div class="header-controls">
         <label class="field">
-          <span>Language</span>
-          <select id="languageSelect"></select>
+          <span>Subject</span>
+          <select id="subjectSelect"></select>
         </label>
         <label class="field">
           <span>Mode</span>
-          <select id="modeSelect">
-            <option value="letters">Letters</option>
-            <option value="words">Words</option>
-            <option value="vyanjan">Vyanjan (Consonants)</option>
-            <option value="mixed">Mixed consonants</option>
-            <option value="all">All (Mixed)</option>
-          </select>
+          <select id="modeSelect"></select>
+        </label>
+        <label class="field" id="multiplyByField" style="display:none">
+          <span>Number</span>
+          <input id="multiplyByInput" type="number" min="1" value="5" style="width:60px;padding:4px 8px;border-radius:6px;border:1px solid #374151;background:#1f2937;color:#f9fafb;font-size:1rem" />
         </label>
       </div>
     </header>
@@ -46,11 +44,9 @@
       </section>
 
       <section class="controls">
-        <div class="btn-group">
-          <button id="prevBtn" class="btn secondary" type="button">◀ Prev</button>
-          <button id="shuffleBtn" class="btn ghost" type="button">🔀 Shuffle</button>
-          <button id="nextBtn" class="btn primary" type="button">Next ▶</button>
-        </div>
+        <button id="prevBtn" class="btn secondary" type="button">◀ Prev</button>
+        <button id="shuffleBtn" class="btn ghost" type="button">Shuffle</button>
+        <button id="nextBtn" class="btn primary" type="button">Next ▶</button>
       </section>
 
       <section class="progress">
@@ -63,6 +59,6 @@
     </footer>
   </div>
 
-  <script src="app.js" type="module"></script>
+  <script src="app.js"></script>
 </body>
 </html>

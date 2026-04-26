@@ -1,21 +1,3 @@
-/**
- * LANGUAGE FLASHCARDS APP
- * 
- * To add more words to any language:
- * 1. Find the language in the `languages` object below (e.g., "english", "hindi", "tamil")
- * 2. Locate the `words` array within that language
- * 3. Add new entries with this format:
- *    { main: "Word", sub: "Definition or translation" }
- * 
- * Example:
- *    { main: "Rainbow", sub: "Colorful arc in the sky" }
- * 
- * To add a new language:
- * 1. Add a new key to the `languages` object
- * 2. Include these arrays: letters, vyanjan (or skip if not applicable), words
- * 3. The app will automatically add it to the language selector
- */
-
 const DEV = {
   VIRAMA: "\u094D",
   KA: "\u0915",
@@ -174,17 +156,7 @@ const languages = {
       { main: "Sun", sub: "The star that gives us light" },
       { main: "Tree", sub: "A tall plant" },
       { main: "Water", sub: "We drink it" },
-      { main: "Book", sub: "We read it" },
-      { main: "Dog", sub: "Man's best friend" },
-      { main: "Bird", sub: "Has wings and can fly" },
-      { main: "Fish", sub: "Lives in water" },
-      { main: "House", sub: "Where we live" },
-      { main: "Moon", sub: "Glows at night" },
-      { main: "Star", sub: "Twinkles in the sky" },
-      { main: "Flower", sub: "Beautiful and colorful" },
-      { main: "Mountain", sub: "Very high and rocky" },
-      { main: "Ocean", sub: "Large body of salt water" },
-      { main: "Cloud", sub: "Floats in the sky" }
+      { main: "Book", sub: "We read it" }
     ]
   },
   hindi: {
@@ -236,22 +208,7 @@ const languages = {
       { main: "फल", sub: "Fruit" },
       { main: "फूल", sub: "Flower" },
       { main: "पानी", sub: "Water" },
-      { main: "किताब", sub: "Book" },
-      { main: "सूरज", sub: "Sun" },
-      { main: "चाँद", sub: "Moon" },
-      { main: "तारा", sub: "Star" },
-      { main: "पेड़", sub: "Tree" },
-      { main: "नदी", sub: "River" },
-      { main: "पर्वत", sub: "Mountain" },
-      { main: "बिल्ली", sub: "Cat" },
-      { main: "कुत्ता", sub: "Dog" },
-      { main: "मछली", sub: "Fish" },
-      { main: "पक्षी", sub: "Bird" },
-      { main: "हाथ", sub: "Hand" },
-      { main: "पैर", sub: "Foot" },
-      { main: "आँख", sub: "Eye" },
-      { main: "कान", sub: "Ear" },
-      { main: "नाक", sub: "Nose" }
+      { main: "किताब", sub: "Book" }
     ]
   },
   tamil: {
@@ -295,17 +252,7 @@ const languages = {
       { main: "நீர்", sub: "Water" },
       { main: "மனை", sub: "House" },
       { main: "பூ", sub: "Flower" },
-      { main: "நாய்", sub: "Dog" },
-      { main: "பூனை", sub: "Cat" },
-      { main: "கடல்", sub: "Ocean" },
-      { main: "சூரியன்", sub: "Sun" },
-      { main: "நிலா", sub: "Moon" },
-      { main: "விண்மீன்", sub: "Star" },
-      { main: "மலை", sub: "Mountain" },
-      { main: "நதி", sub: "River" },
-      { main: "பறவை", sub: "Bird" },
-      { main: "மீன்", sub: "Fish" },
-      { main: "புத்தகம்", sub: "Book" }
+      { main: "நாய்", sub: "Dog" }
     ]
   },
   kannada: {
@@ -369,32 +316,140 @@ const languages = {
       { main: "ನೀರು", sub: "Water" },
       { main: "ಪುಸ್ತಕ", sub: "Book" },
       { main: "ಸೂರ್ಯ", sub: "Sun" },
-      { main: "ಮರ", sub: "Tree" },
-      { main: "ಚಂದ್ರ", sub: "Moon" },
-      { main: "ನಕ್ಷತ್ರ", sub: "Star" },
-      { main: "ಸಮುದ್ರ", sub: "Ocean" },
-      { main: "ಪರ್ವತ", sub: "Mountain" },
-      { main: "ನದಿ", sub: "River" },
-      { main: "ಪಕ್ಷಿ", sub: "Bird" },
-      { main: "ಮೀನು", sub: "Fish" },
-      { main: "ಬೆಕ್ಕು", sub: "Cat" },
-      { main: "ನಾಯಿ", sub: "Dog" },
-      { main: "ಮೇಘ", sub: "Cloud" }
+      { main: "ಮರ", sub: "Tree" }
     ]
   }
 };
 
-function getMixedConsonants(langKey) {
-  if (langKey === "hindi") {
+function generateOneMathCard(op) {
+  let a, b, question, answer;
+  switch (op) {
+    case "addition":
+      a = Math.floor(Math.random() * 50) + 1;
+      b = Math.floor(Math.random() * 50) + 1;
+      question = a + " + " + b;
+      answer = a + b;
+      break;
+    case "subtraction":
+      a = Math.floor(Math.random() * 50) + 10;
+      b = Math.floor(Math.random() * a) + 1;
+      question = a + " − " + b;
+      answer = a - b;
+      break;
+    case "multiplication":
+      a = Math.floor(Math.random() * 12) + 2;
+      b = Math.floor(Math.random() * 12) + 2;
+      question = a + " × " + b;
+      answer = a * b;
+      break;
+    case "division":
+      b = Math.floor(Math.random() * 12) + 2;
+      answer = Math.floor(Math.random() * 12) + 1;
+      a = b * answer;
+      question = a + " ÷ " + b;
+      break;
+    case "multiply_by": {
+      var n = getMultiplyByNumber();
+      var repeated = buildRepeatedNumbers(n);
+      var pick = repeated[Math.floor(Math.random() * repeated.length)];
+      b = Math.floor(Math.random() * 12) + 1;
+      question = pick + " × " + b;
+      answer = pick * b;
+      break;
+    }
+  }
+  return { main: question, sub: "= " + answer };
+}
+
+function getMultiplyByNumber() {
+  var input = document.getElementById("multiplyByInput");
+  var val = parseInt(input ? input.value : "5", 10);
+  return val > 0 ? val : 5;
+}
+
+function buildRepeatedNumbers(n) {
+  var results = [];
+  var s = "";
+  for (var i = 0; i < 4; i++) {
+    s += String(n);
+    results.push(parseInt(s, 10));
+  }
+  return results;
+}
+
+function nextMathCard() {
+  var ops = ["addition", "subtraction", "multiplication", "division"];
+  var op = currentMode === "all"
+    ? ops[Math.floor(Math.random() * ops.length)]
+    : currentMode;
+  return generateOneMathCard(op);
+}
+
+const subjects = {
+  english: {
+    label: "English",
+    modes: [
+      { value: "letters", label: "Letters" },
+      { value: "words", label: "Words" },
+      { value: "vyanjan", label: "Vyanjan (Consonants)" },
+      { value: "mixed", label: "Mixed consonants" },
+      { value: "all", label: "All (Mixed)" }
+    ]
+  },
+  hindi: {
+    label: "Hindi (हिन्दी)",
+    modes: [
+      { value: "letters", label: "Letters" },
+      { value: "words", label: "Words" },
+      { value: "vyanjan", label: "Vyanjan (Consonants)" },
+      { value: "mixed", label: "Mixed consonants" },
+      { value: "all", label: "All (Mixed)" }
+    ]
+  },
+  tamil: {
+    label: "Tamil (தமிழ்)",
+    modes: [
+      { value: "letters", label: "Letters" },
+      { value: "words", label: "Words" },
+      { value: "vyanjan", label: "Vyanjan (Consonants)" },
+      { value: "mixed", label: "Mixed consonants" },
+      { value: "all", label: "All (Mixed)" }
+    ]
+  },
+  kannada: {
+    label: "Kannada (ಕನ್ನಡ)",
+    modes: [
+      { value: "letters", label: "Letters" },
+      { value: "words", label: "Words" },
+      { value: "vyanjan", label: "Vyanjan (Consonants)" },
+      { value: "mixed", label: "Mixed consonants" },
+      { value: "all", label: "All (Mixed)" }
+    ]
+  },
+  maths: {
+    label: "Maths",
+    modes: [
+      { value: "addition", label: "Addition (+)" },
+      { value: "subtraction", label: "Subtraction (−)" },
+      { value: "multiplication", label: "Multiplication (×)" },
+      { value: "division", label: "Division (÷)" },
+      { value: "multiply_by", label: "Multiply by N" },
+      { value: "all", label: "All (Mixed)" }
+    ]
+  }
+};
+
+function getMixedConsonants(subjectKey) {
+  if (subjectKey === "hindi") {
     return generateHindiClusters();
   }
 
-  const lang = languages[langKey];
+  const lang = languages[subjectKey];
   if (!lang || !Array.isArray(lang.vyanjan)) return [];
   return lang.vyanjan;
 }
 
-const languageSelect = document.getElementById("languageSelect");
+const subjectSelect = document.getElementById("subjectSelect");
 const modeSelect = document.getElementById("modeSelect");
 const cardMain = document.getElementById("cardMain");
 const cardSub = document.getElementById("cardSub");
@@ -404,29 +459,63 @@ const nextBtn = document.getElementById("nextBtn");
 const shuffleBtn = document.getElementById("shuffleBtn");
 const progressText = document.getElementById("progressText");
 
-let currentLangKey = "hindi";
+let currentSubjectKey = "hindi";
 let currentMode = "letters";
 let currentIndex = 0;
 let order = [];
 let isAnimating = false;
+let mathHistory = [];
+let mathPosition = -1;
+const MATH_HISTORY_MAX = 5;
 
-function initLanguageOptions() {
-  Object.entries(languages).forEach(([key, value]) => {
+function initSubjectOptions() {
+  Object.entries(subjects).forEach(([key, value]) => {
     const opt = document.createElement("option");
     opt.value = key;
     opt.textContent = value.label;
-    languageSelect.appendChild(opt);
+    subjectSelect.appendChild(opt);
   });
 
-  languageSelect.value = currentLangKey;
+  subjectSelect.value = currentSubjectKey;
+  updateModeOptions();
+}
+
+function updateModeOptions() {
+  const subject = subjects[currentSubjectKey];
+  if (!subject) return;
+
+  modeSelect.innerHTML = "";
+  subject.modes.forEach(function (m) {
+    const opt = document.createElement("option");
+    opt.value = m.value;
+    opt.textContent = m.label;
+    modeSelect.appendChild(opt);
+  });
+
+  if (!subject.modes.some(function (m) { return m.value === currentMode; })) {
+    currentMode = subject.modes[0].value;
+  }
+  modeSelect.value = currentMode;
+
+  var multiplyByField = document.getElementById("multiplyByField");
+  if (multiplyByField) {
+    multiplyByField.style.display =
+      (currentSubjectKey === "maths" && currentMode === "multiply_by") ? "" : "none";
+  }
+}
+
+function isMathMode() {
+  return currentSubjectKey === "maths";
 }
 
 function getCurrentList() {
-  const lang = languages[currentLangKey];
+  if (isMathMode()) return mathHistory;
+
+  const lang = languages[currentSubjectKey];
   if (!lang) return [];
 
   if (currentMode === "mixed") {
-    return getMixedConsonants(currentLangKey);
+    return getMixedConsonants(currentSubjectKey);
   }
 
   if (currentMode === "all") {
@@ -440,7 +529,35 @@ function getCurrentList() {
   return lang[currentMode] ?? [];
 }
 
+function resetMathHistory() {
+  mathHistory = [nextMathCard()];
+  mathPosition = 0;
+}
+
+function mathNext() {
+  if (mathPosition < mathHistory.length - 1) {
+    mathPosition++;
+  } else {
+    mathHistory.push(nextMathCard());
+    mathPosition = mathHistory.length - 1;
+    if (mathHistory.length > MATH_HISTORY_MAX + 1) {
+      mathHistory.shift();
+      mathPosition--;
+    }
+  }
+}
+
+function mathPrev() {
+  if (mathPosition > 0) {
+    mathPosition--;
+  }
+}
+
 function buildOrder() {
+  if (isMathMode()) {
+    resetMathHistory();
+    return;
+  }
   const list = getCurrentList();
   order = list.map((_, idx) => idx);
   shuffleOrder();
@@ -461,12 +578,26 @@ function clampIndex(idx) {
 }
 
 function renderCard() {
+  if (isMathMode()) {
+    if (!mathHistory.length) {
+      cardMain.textContent = "No data";
+      cardSub.textContent = "Try another mode or subject";
+      progressText.textContent = "0 / 0";
+      return;
+    }
+    const item = mathHistory[mathPosition];
+    cardMain.textContent = item.main;
+    cardSub.textContent = item.sub ?? "";
+    progressText.textContent = "∞";
+    return;
+  }
+
   const list = getCurrentList();
   const total = list.length;
 
   if (!total) {
     cardMain.textContent = "No data";
-    cardSub.textContent = "Try another mode or language";
+    cardSub.textContent = "Try another mode or subject";
     progressText.textContent = "0 / 0";
     return;
   }
@@ -487,9 +618,10 @@ function playIntroAnimation() {
   cardEl.classList.add("card-animate-in");
 }
 
-function onLanguageChange() {
-  currentLangKey = languageSelect.value;
+function onSubjectChange() {
+  currentSubjectKey = subjectSelect.value;
   currentIndex = 0;
+  updateModeOptions();
   buildOrder();
   renderCard();
   playIntroAnimation();
@@ -498,13 +630,15 @@ function onLanguageChange() {
 function onModeChange() {
   currentMode = modeSelect.value;
   currentIndex = 0;
+  updateModeOptions();
   buildOrder();
   renderCard();
   playIntroAnimation();
 }
 
 function runSwipe(direction) {
-  if (!order.length || isAnimating) return;
+  if (isAnimating) return;
+  if (!isMathMode() && !order.length) return;
 
   isAnimating = true;
   const className = direction === "left" ? "card-swipe-left" : "card-swipe-right";
@@ -517,8 +651,13 @@ function runSwipe(direction) {
     "animationend",
     () => {
       cardEl.classList.remove(className);
-      const delta = direction === "left" ? -1 : 1;
-      currentIndex = clampIndex(currentIndex + delta);
+      if (isMathMode()) {
+        if (direction === "left") mathPrev();
+        else mathNext();
+      } else {
+        const delta = direction === "left" ? -1 : 1;
+        currentIndex = clampIndex(currentIndex + delta);
+      }
       renderCard();
       isAnimating = false;
     },
@@ -535,6 +674,12 @@ function onNext() {
 }
 
 function onShuffle() {
+  if (isMathMode()) {
+    resetMathHistory();
+    renderCard();
+    playIntroAnimation();
+    return;
+  }
   if (!order.length) return;
   shuffleOrder();
   currentIndex = 0;
@@ -543,11 +688,22 @@ function onShuffle() {
 }
 
 function initEvents() {
-  languageSelect.addEventListener("change", onLanguageChange);
+  subjectSelect.addEventListener("change", onSubjectChange);
   modeSelect.addEventListener("change", onModeChange);
   prevBtn.addEventListener("click", onPrev);
   nextBtn.addEventListener("click", onNext);
   shuffleBtn.addEventListener("click", onShuffle);
+
+  var multiplyByInput = document.getElementById("multiplyByInput");
+  if (multiplyByInput) {
+    multiplyByInput.addEventListener("change", function () {
+      if (currentSubjectKey === "maths" && currentMode === "multiply_by") {
+        resetMathHistory();
+        renderCard();
+        playIntroAnimation();
+      }
+    });
+  }
 
   window.addEventListener("keydown", (ev) => {
     if (ev.key === "ArrowLeft") onPrev();
@@ -566,7 +722,7 @@ function registerServiceWorker() {
 }
 
 function init() {
-  initLanguageOptions();
+  initSubjectOptions();
   buildOrder();
   initEvents();
   renderCard();
