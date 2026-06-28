@@ -1,0 +1,620 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Font Base64 Generator</title>
+    <style>
+        :root {
+            --bg: #0f1720;
+            --surface: #161c2a;
+            --surface-2: #1f2937;
+            --text: #e2e8f0;
+            --muted: #94a3b8;
+            --accent: #60a5fa;
+            --accent-strong: #38bdf8;
+            --border: #334155;
+            --success: #4ade80;
+            --error: #f87171;
+            --radius: 16px;
+            --shadow: 0 25px 60px rgba(15, 23, 42, 0.25);
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 0;
+            min-height: 100vh;
+            font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: radial-gradient(circle at top, rgba(96, 165, 250, 0.15), transparent 30%),
+                        linear-gradient(180deg, #0b1120 0%, #0e1726 100%);
+            color: var(--text);
+        }
+
+        header {
+            padding: 1.5rem 1.5rem 1rem;
+            max-width: 1100px;
+            margin: 0 auto;
+        }
+
+        .topbar {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: space-between;
+            gap: 1rem;
+            align-items: center;
+            margin-bottom: 1rem;
+        }
+
+        .topbar a {
+            color: var(--accent);
+            text-decoration: none;
+            font-weight: 600;
+        }
+
+        .title-group h1 {
+            margin: 0 0 0.5rem;
+            font-size: clamp(2rem, 4vw, 3rem);
+        }
+
+        .title-group p {
+            margin: 0;
+            max-width: 720px;
+            color: var(--muted);
+            line-height: 1.7;
+        }
+
+        main {
+            max-width: 1100px;
+            margin: 0 auto 3rem;
+            padding: 0 1.5rem;
+            display: grid;
+            gap: 1.5rem;
+        }
+
+        .panel {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            box-shadow: var(--shadow);
+            padding: 1.5rem;
+        }
+
+        .panel h2 {
+            margin: 0 0 1rem;
+            font-size: 1.15rem;
+            color: var(--text);
+        }
+
+        .grid {
+            display: grid;
+            gap: 1rem;
+        }
+
+        .field {
+            display: grid;
+            gap: 0.5rem;
+        }
+
+        label {
+            display: flex;
+            justify-content: space-between;
+            gap: 1rem;
+            font-size: 0.95rem;
+            color: var(--muted);
+        }
+
+        input[type="text"], textarea, select {
+            width: 100%;
+            min-height: 44px;
+            border-radius: 12px;
+            border: 1px solid var(--border);
+            background: #0b1320;
+            color: var(--text);
+            padding: 0.9rem 1rem;
+            font-size: 0.95rem;
+            outline: none;
+        }
+
+        textarea {
+            min-height: 220px;
+            resize: vertical;
+            font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', monospace;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+            overflow-wrap: anywhere;
+        }
+
+        input[type="file"] {
+            color: var(--text);
+        }
+
+        .toolbar {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.75rem;
+            align-items: center;
+            margin-top: 0.5rem;
+        }
+
+        button {
+            background: var(--accent);
+            color: #0b1120;
+            border: none;
+            border-radius: 999px;
+            padding: 0.85rem 1.3rem;
+            font-size: 0.96rem;
+            font-weight: 700;
+            cursor: pointer;
+            transition: transform 0.2s ease, background-color 0.2s ease;
+        }
+
+        button:hover {
+            transform: translateY(-1px);
+            background: var(--accent-strong);
+        }
+
+        button.secondary {
+            background: transparent;
+            color: var(--text);
+            border: 1px solid var(--border);
+        }
+
+        button.secondary:hover {
+            background: rgba(96, 165, 250, 0.08);
+        }
+
+        .output-group {
+            display: grid;
+            gap: 1rem;
+        }
+
+        .output-group pre {
+            margin: 0;
+            padding: 1rem;
+            border-radius: 14px;
+            background: #0b1320;
+            overflow-x: auto;
+            white-space: pre-wrap;
+            word-break: break-word;
+            border: 1px solid var(--border);
+            font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', monospace;
+            color: var(--text);
+        }
+
+        .status {
+            min-height: 1.2rem;
+            color: var(--muted);
+            font-size: 0.95rem;
+        }
+
+        .status.success {
+            color: var(--success);
+        }
+
+        .status.error {
+            color: var(--error);
+        }
+
+        .split {
+            display: grid;
+            gap: 1rem;
+        }
+
+        .split .panel {
+            padding: 1.25rem;
+        }
+
+        .copy-line {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 0.75rem;
+        }
+
+        .copy-line span {
+            color: var(--muted);
+            font-size: 0.9rem;
+        }
+
+        @media (min-width: 900px) {
+            .split {
+                grid-template-columns: 1fr 1fr;
+            }
+        }
+
+        @media (max-width: 600px) {
+            .topbar {
+                flex-direction: column;
+                align-items: flex-start;
+            }
+
+            .toolbar {
+                flex-direction: column;
+                align-items: stretch;
+            }
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <div class="topbar">
+            <div class="title-group">
+                <a href="index.html">← Back to CodeBox</a>
+                <h1>Font Base64 Generator</h1>
+                <p>Upload a font file or enter a Google Fonts family/URL to generate an embeddable base64 data URI for HTML and CSS.</p>
+            </div>
+        </div>
+    </header>
+
+    <main>
+        <section class="panel">
+            <h2>Source</h2>
+            <div class="grid">
+                <div class="field">
+                    <label for="googleFontInput">Google Fonts family or URL</label>
+                    <input id="googleFontInput" type="text" placeholder="e.g. Roboto&amp;display=swap or https://fonts.googleapis.com/css2?family=Roboto" />
+                </div>
+                <div class="field">
+                    <label for="fontFileInput">Local font file</label>
+                    <input id="fontFileInput" type="file" accept=".ttf,.otf,.woff,.woff2" />
+                </div>
+                <div class="toolbar">
+                    <button id="fetchGoogleBtn">Fetch Google Font</button>
+                    <button id="encodeFileBtn" class="secondary">Encode Selected File</button>
+                </div>
+                <div class="status" id="sourceStatus">Choose a local font file or enter a Google Fonts family or URL, then click one of the buttons.</div>
+            </div>
+        </section>
+
+        <section class="panel split">
+            <div>
+                <h2>Base64 Output</h2>
+                <div class="copy-line">
+                    <span>Paste or edit Base64 content here, then download the decoded font file or copy the data URI.</span>
+                    <div style="display:flex; gap:0.5rem; flex-wrap:wrap; align-items:center;">
+                        <button id="downloadFontBtn" class="secondary">Download Font</button>
+                        <button id="copyBase64Btn" class="secondary">Copy Base64</button>
+                    </div>
+                </div>
+                <textarea id="base64Output" placeholder="Base64 result appears here... You can paste your own base64 data or data URI here."></textarea>
+            </div>
+            <div>
+                <h2>CSS `@font-face` Snippet</h2>
+                <div class="copy-line">
+                    <span>Paste directly into your stylesheet.</span>
+                    <button id="copyCssBtn" class="secondary">Copy CSS</button>
+                </div>
+                <pre id="cssOutput"></pre>
+            </div>
+        </section>
+
+        <section class="panel">
+            <h2>Details</h2>
+            <div class="grid">
+                <div class="field">
+                    <label for="fontFamilyInput">Font family name</label>
+                    <input id="fontFamilyInput" type="text" placeholder="e.g. Roboto" />
+                </div>
+                <div class="field">
+                    <label for="fontFormatSelect">Font format</label>
+                    <select id="fontFormatSelect">
+                        <option value="font/woff2">woff2</option>
+                        <option value="font/woff">woff</option>
+                        <option value="font/ttf">ttf</option>
+                        <option value="font/otf">otf</option>
+                        <option value="application/octet-stream">application/octet-stream</option>
+                    </select>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <script>
+        const googleFontInput = document.getElementById('googleFontInput');
+        const fontFileInput = document.getElementById('fontFileInput');
+        const fetchGoogleBtn = document.getElementById('fetchGoogleBtn');
+        const encodeFileBtn = document.getElementById('encodeFileBtn');
+        const sourceStatus = document.getElementById('sourceStatus');
+        const base64Output = document.getElementById('base64Output');
+        const cssOutput = document.getElementById('cssOutput');
+        const fontFamilyInput = document.getElementById('fontFamilyInput');
+        const fontFormatSelect = document.getElementById('fontFormatSelect');
+        const copyBase64Btn = document.getElementById('copyBase64Btn');
+        const copyCssBtn = document.getElementById('copyCssBtn');
+
+        const showStatus = (message, type = '') => {
+            sourceStatus.textContent = message;
+            sourceStatus.className = type ? `status ${type}` : 'status';
+        };
+
+        const guessMimeType = (name) => {
+            const ext = name.split('.').pop().toLowerCase();
+            switch (ext) {
+                case 'woff2': return 'font/woff2';
+                case 'woff': return 'font/woff';
+                case 'ttf': return 'font/ttf';
+                case 'otf': return 'font/otf';
+                default: return 'application/octet-stream';
+            }
+        };
+
+        const toBase64 = (buffer) => {
+            const bytes = new Uint8Array(buffer);
+            let binary = '';
+            const chunkSize = 0x8000;
+            for (let i = 0; i < bytes.length; i += chunkSize) {
+                binary += String.fromCharCode.apply(null, bytes.subarray(i, i + chunkSize));
+            }
+            return btoa(binary);
+        };
+
+        const setOutputs = (family, mime, base64, metadata = {}) => {
+            const dataUri = `data:${mime};base64,${base64}`;
+            base64Output.value = dataUri;
+            const safeFamily = family.replace(/['"\\]/g, '');
+            const style = metadata.style || 'normal';
+            const weight = metadata.weight || 'normal';
+            const stretch = metadata.stretch ? `  font-stretch: ${metadata.stretch};\n` : '';
+            cssOutput.textContent = `@font-face {\n  font-family: '${safeFamily}';\n  src: url("${dataUri}") format('${getCssFormat(mime)}');\n  font-style: ${style};\n  font-weight: ${weight};\n${stretch}  font-display: swap;\n}`;
+        };
+
+        const parseGoogleFontUrl = (value) => {
+            try {
+                const url = new URL(value);
+                if (!url.hostname.includes('fonts.googleapis.com')) {
+                    return null;
+                }
+                if (!url.searchParams.has('family')) {
+                    return null;
+                }
+                return url.toString();
+            } catch {
+                return null;
+            }
+        };
+
+        const parseGoogleFontFamily = (value) => {
+            const trimmed = value.trim();
+            if (!trimmed) {
+                return null;
+            }
+            try {
+                const url = new URL(trimmed);
+                if (url.hostname.includes('fonts.googleapis.com')) {
+                    const familyParam = url.searchParams.get('family');
+                    if (familyParam) {
+                        return familyParam.split(/[&:]/)[0].replace(/\+/g, ' ');
+                    }
+                }
+            } catch {
+                // Not a URL; continue to parse as plain family spec.
+            }
+
+            const plain = trimmed.split('&')[0].split('?')[0].split(':')[0];
+            return plain.replace(/\+/g, ' ').trim() || null;
+        };
+
+        const buildGoogleCssUrl = (value) => {
+            const trimmed = value.trim();
+            if (!trimmed) {
+                return null;
+            }
+            const parsed = parseGoogleFontUrl(trimmed);
+            if (parsed) {
+                return parsed;
+            }
+
+            if (/^family=/i.test(trimmed)) {
+                return `https://fonts.googleapis.com/css2?${trimmed}`;
+            }
+
+            const [familySpec, ...extraParts] = trimmed.split('&');
+            const family = familySpec.replace(/\s+/g, '+');
+            const extraQuery = extraParts.length ? `&${extraParts.join('&')}` : '&display=swap';
+            return `https://fonts.googleapis.com/css2?family=${family}${extraQuery}`;
+        };
+
+        const parseFontFaceMetadata = (cssText, targetUrl) => {
+            const blockRegex = /@font-face\s*\{([\s\S]*?)\}/gi;
+            let blockMatch;
+
+            while ((blockMatch = blockRegex.exec(cssText)) !== null) {
+                const block = blockMatch[1];
+                const srcMatch = /src\s*:\s*url\((['"]?)([^'")]+)\1\)/i.exec(block);
+                if (srcMatch) {
+                    const srcUrl = srcMatch[2].trim();
+                    if (!targetUrl || srcUrl === targetUrl || srcUrl === targetUrl.replace(/^https?:/, '') || targetUrl.endsWith(srcUrl) || srcUrl.endsWith(targetUrl.split('/').pop())) {
+                        const familyMatch = /font-family\s*:\s*['"]?([^;'"\n]+)['"]?/i.exec(block);
+                        const styleMatch = /font-style\s*:\s*([^;\n]+)/i.exec(block);
+                        const weightMatch = /font-weight\s*:\s*([^;\n]+)/i.exec(block);
+                        const stretchMatch = /font-stretch\s*:\s*([^;\n]+)/i.exec(block);
+                        return {
+                            family: familyMatch ? familyMatch[1].trim() : null,
+                            style: styleMatch ? styleMatch[1].trim() : 'normal',
+                            weight: weightMatch ? weightMatch[1].trim() : 'normal',
+                            stretch: stretchMatch ? stretchMatch[1].trim() : null,
+                        };
+                    }
+                }
+            }
+            return null;
+        };
+
+        const getCssFormat = (mime) => {
+            if (mime.includes('woff2')) return 'woff2';
+            if (mime.includes('woff')) return 'woff';
+            if (mime.includes('ttf')) return 'truetype';
+            if (mime.includes('otf')) return 'opentype';
+            return 'truetype';
+        };
+
+        const pickFontUrl = (cssText) => {
+            const regex = /url\(([^)]+)\)\s*format\(['"]?([^'"\)]+)['"]?\)/g;
+            const candidates = [];
+            let match;
+            while ((match = regex.exec(cssText)) !== null) {
+                const url = match[1].trim().replace(/['"]/g, '');
+                const format = match[2].trim().toLowerCase();
+                candidates.push({ url, format });
+            }
+            const priority = ['woff2', 'woff', 'truetype', 'opentype'];
+            for (const type of priority) {
+                const candidate = candidates.find((item) => item.format.includes(type));
+                if (candidate) {
+                    return candidate;
+                }
+            }
+            return candidates[0] || null;
+        };
+
+        const fetchGoogleFont = async () => {
+            const input = googleFontInput.value.trim();
+            if (!input) {
+                showStatus('Enter a Google Fonts family name or a valid fonts.googleapis.com URL.', 'error');
+                return;
+            }
+            const cssUrl = buildGoogleCssUrl(input);
+            showStatus('Fetching Google Fonts CSS...', '');
+            try {
+                const cssResponse = await fetch(cssUrl, { headers: { 'Accept': 'text/css' } });
+                if (!cssResponse.ok) {
+                    throw new Error(`CSS fetch failed: ${cssResponse.status} ${cssResponse.statusText}`);
+                }
+                const cssText = await cssResponse.text();
+                const fontMatch = pickFontUrl(cssText);
+                if (!fontMatch) {
+                    throw new Error('Could not find a font URL inside the Google Fonts stylesheet.');
+                }
+                const fontUrl = fontMatch.url.startsWith('http') ? fontMatch.url : `https:${fontMatch.url}`;
+                const fontMime = fontMatch.format.includes('woff2') ? 'font/woff2'
+                    : fontMatch.format.includes('woff') ? 'font/woff'
+                    : fontMatch.format.includes('truetype') ? 'font/ttf'
+                    : fontMatch.format.includes('opentype') ? 'font/otf'
+                    : 'application/octet-stream';
+                showStatus(`Downloading ${fontMatch.format} font file...`, '');
+                const fontResponse = await fetch(fontUrl);
+                if (!fontResponse.ok) {
+                    throw new Error(`Font download failed: ${fontResponse.status} ${fontResponse.statusText}`);
+                }
+                const buffer = await fontResponse.arrayBuffer();
+                const base64 = toBase64(buffer);
+                const detectedFamily = parseGoogleFontFamily(input) || 'CustomFont';
+                const family = fontFamilyInput.value.trim() || detectedFamily;
+                const metadata = parseFontFaceMetadata(cssText, fontUrl) || {};
+                fontFormatSelect.value = fontMime;
+                fontFamilyInput.value = metadata.family || family;
+                setOutputs(fontFamilyInput.value, fontMime, base64, metadata);
+                showStatus('Google Font converted successfully. Copy the CSS snippet or base64 data URI.', 'success');
+            } catch (error) {
+                showStatus(error.message || 'Google Fonts conversion failed.', 'error');
+                base64Output.value = '';
+                cssOutput.textContent = '';
+            }
+        };
+
+        const encodeSelectedFile = async () => {
+            const file = fontFileInput.files && fontFileInput.files[0];
+            if (!file) {
+                showStatus('Select a font file first.', 'error');
+                return;
+            }
+            showStatus('Reading font file...', '');
+            try {
+                const buffer = await file.arrayBuffer();
+                const base64 = toBase64(buffer);
+                const mime = guessMimeType(file.name);
+                fontFormatSelect.value = mime;
+                fontFamilyInput.value = fontFamilyInput.value.trim() || file.name.replace(/\.[^.]+$/, '') || 'LocalFont';
+                setOutputs(fontFamilyInput.value, mime, base64);
+                showStatus(`Encoded ${file.name} as base64. Use the generated CSS snippet directly.`, 'success');
+            } catch (error) {
+                showStatus(`Failed to read file: ${error.message}`, 'error');
+                base64Output.value = '';
+                cssOutput.textContent = '';
+            }
+        };
+
+        fetchGoogleBtn.addEventListener('click', fetchGoogleFont);
+        encodeFileBtn.addEventListener('click', encodeSelectedFile);
+
+        const downloadFont = () => {
+            const value = base64Output.value.trim();
+            if (!value) {
+                showStatus('Nothing to download. Generate a base64 result first.', 'error');
+                return;
+            }
+
+            let rawBase64 = value;
+            let mime = fontFormatSelect.value || 'application/octet-stream';
+            const dataUriMatch = value.match(/^\s*data:([^;]+)(?:;charset=[^;]+)?;base64,(.+)$/i);
+            if (dataUriMatch) {
+                mime = dataUriMatch[1];
+                rawBase64 = dataUriMatch[2];
+            }
+
+            rawBase64 = rawBase64.replace(/\s+/g, '');
+
+            try {
+                const binary = atob(rawBase64);
+                const array = new Uint8Array(binary.length);
+                for (let i = 0; i < binary.length; i += 1) {
+                    array[i] = binary.charCodeAt(i);
+                }
+                const extension = mime.includes('woff2') ? 'woff2'
+                    : mime.includes('woff') ? 'woff'
+                    : mime.includes('ttf') ? 'ttf'
+                    : mime.includes('otf') ? 'otf'
+                    : 'bin';
+                const filename = `${fontFamilyInput.value.trim().replace(/[^a-zA-Z0-9-_]/g, '_') || 'font'}.${extension}`;
+                const blob = new Blob([array], { type: mime });
+                const url = URL.createObjectURL(blob);
+                const anchor = document.createElement('a');
+                anchor.href = url;
+                anchor.download = filename;
+                document.body.appendChild(anchor);
+                anchor.click();
+                document.body.removeChild(anchor);
+                URL.revokeObjectURL(url);
+                showStatus(`Downloaded ${filename}.`, 'success');
+            } catch (err) {
+                showStatus(`Download failed: ${err.message}`, 'error');
+            }
+        };
+
+        copyBase64Btn.addEventListener('click', async () => {
+            if (!base64Output.value) {
+                showStatus('Nothing to copy. Generate a base64 result first.', 'error');
+                return;
+            }
+            await navigator.clipboard.writeText(base64Output.value);
+            showStatus('Base64 data URI copied to clipboard.', 'success');
+        });
+
+        copyCssBtn.addEventListener('click', async () => {
+            if (!cssOutput.textContent) {
+                showStatus('Nothing to copy. Generate a font snippet first.', 'error');
+                return;
+            }
+            await navigator.clipboard.writeText(cssOutput.textContent);
+            showStatus('CSS @font-face snippet copied to clipboard.', 'success');
+        });
+
+        document.getElementById('downloadFontBtn').addEventListener('click', downloadFont);
+
+        fontFormatSelect.addEventListener('change', () => {
+            if (!base64Output.value || !cssOutput.textContent) {
+                return;
+            }
+            const parts = base64Output.value.split(';base64,');
+            if (parts.length === 2) {
+                const base64 = parts[1];
+                const mime = fontFormatSelect.value;
+                setOutputs(fontFamilyInput.value || 'CustomFont', mime, base64);
+            }
+        });
+    </script>
+</body>
+</html>
