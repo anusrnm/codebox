@@ -4,6 +4,8 @@ import (
 	"bufio"
 	"compress/gzip"
 	"context"
+	"encoding/base64"
+	"errors"
 	"encoding/json"
 	"flag"
 	"fmt"
@@ -12,6 +14,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -44,6 +47,14 @@ type Config struct {
 	SubscriptionID string
 	TopicProjectID string
 	TopicID        string
+	RedirectTopicProjectID string
+	RedirectTopicID        string
+	RedirectOnly           bool
+	RedirectPublishTimeout time.Duration
+	MaxOutstandingMessages int
+	ProcessDelay           time.Duration
+	MaxProcessRate         float64
+	OutputFormat           string
 	OutputFile     string
 	MaxMessages    int64
 	Duration       time.Duration
@@ -71,11 +82,27 @@ type Stats struct {
 	StartTime          time.Time
 }
 
+type StoredMessage struct {
+	Version         int               `json:"version"`
+	ReceivedAt      string            `json:"received_at"`
+	ProjectID       string            `json:"project_id,omitempty"`
+	SubscriptionID  string            `json:"subscription_id,omitempty"`
+	SourceMessageID string            `json:"source_message_id,omitempty"`
+	PublishTime     string            `json:"publish_time,omitempty"`
+	OrderingKey     string            `json:"ordering_key,omitempty"`
+	DeliveryAttempt int               `json:"delivery_attempt,omitempty"`
+	Attributes      map[string]string `json:"attributes"`
+	DataBase64      string            `json:"data_base64"`
+}
+
 var (
 	config          Config
 	stats           Stats
 	fieldsToExclude map[string]struct{}
 	outputWriter    *OutputWriter
+	redirectTopic   *pubsub.Topic
+	rateTicker      *time.Ticker
+	rateTickCh      <-chan time.Time
 )
 
 // OutputWriter handles buffered file writing with thread safety
@@ -130,6 +157,22 @@ func init() {
 		"Topic Project ID for temp subscriptions (auto-detected, env: PUBSUB_TOPIC_PROJECT_ID)")
 	flag.StringVar(&config.TopicID, "topic", envOrDefault("PUBSUB_TOPIC_ID", ""),
 		"Topic ID for temp subscriptions (env: PUBSUB_TOPIC_ID)")
+	flag.StringVar(&config.RedirectTopicProjectID, "redirect-topic-project", getDefaultProjectID(""),
+		"Project ID for redirected messages (auto-detected, env: PUBSUB_REDIRECT_TOPIC_PROJECT_ID)")
+	flag.StringVar(&config.RedirectTopicID, "redirect-topic", envOrDefault("PUBSUB_REDIRECT_TOPIC_ID", ""),
+		"Destination topic ID to republish received messages (env: PUBSUB_REDIRECT_TOPIC_ID)")
+	flag.BoolVar(&config.RedirectOnly, "redirect-only", false,
+		"Redirect messages without writing to output file (env: PUBSUB_REDIRECT_ONLY=true)")
+	flag.DurationVar(&config.RedirectPublishTimeout, "redirect-publish-timeout", 15*time.Second,
+		"Timeout for redirect publish confirmation (e.g., 5s, 30s)")
+	flag.IntVar(&config.MaxOutstandingMessages, "max-outstanding-messages", envIntOrDefault("PUBSUB_MAX_OUTSTANDING_MESSAGES", 100),
+		"Maximum concurrent in-flight message handlers")
+	flag.DurationVar(&config.ProcessDelay, "process-delay", envDurationOrDefault("PUBSUB_PROCESS_DELAY", 0),
+		"Fixed delay before processing each message (e.g., 100ms, 1s)")
+	flag.Float64Var(&config.MaxProcessRate, "max-process-rate", envFloatOrDefault("PUBSUB_MAX_PROCESS_RATE", 0),
+		"Maximum processing rate in messages/second (0 = unlimited)")
+	flag.StringVar(&config.OutputFormat, "output-format", strings.ToLower(envOrDefault("PUBSUB_OUTPUT_FORMAT", "ndjson")),
+		"Output format: 'ndjson' (replay-safe) or 'legacy' (two-line attributes+data)")
 	flag.StringVar(&config.OutputFile, "output", envOrDefault("PUBSUB_OUTPUT_FILE", "messages.txt"),
 		"Output file path (env: PUBSUB_OUTPUT_FILE)")
 	flag.Int64Var(&config.MaxMessages, "max-messages", 0,
@@ -173,11 +216,66 @@ func init() {
 		fmt.Fprintf(os.Stderr, "  %s -subscription my-sub -quiet -no-color\n", os.Args[0])
 		fmt.Fprintf(os.Stderr, "  %s -purge  # Clear all pending messages\n", os.Args[0])
 		fmt.Fprintf(os.Stderr, "  %s -topic my-topic -filter 'attributes.type=\"order\"'  # Filter messages\n", os.Args[0])
+		fmt.Fprintf(os.Stderr, "  %s -subscription my-sub -redirect-topic archive-topic\n", os.Args[0])
+		fmt.Fprintf(os.Stderr, "  %s -subscription my-sub -redirect-topic archive-topic -redirect-only\n", os.Args[0])
+		fmt.Fprintf(os.Stderr, "  %s -subscription my-sub -output-format ndjson  # Replay-safe records\n", os.Args[0])
+		fmt.Fprintf(os.Stderr, "  %s -subscription my-sub -output-format legacy  # Backward-compatible two-line format\n", os.Args[0])
 	}
 }
 
 func main() {
 	flag.Parse()
+
+	if envRedirectOnly := strings.TrimSpace(os.Getenv("PUBSUB_REDIRECT_ONLY")); envRedirectOnly != "" {
+		if strings.EqualFold(envRedirectOnly, "true") || envRedirectOnly == "1" || strings.EqualFold(envRedirectOnly, "yes") {
+			config.RedirectOnly = true
+		}
+	}
+
+	if config.RedirectTopicID != "" && config.RedirectTopicProjectID == "" {
+		config.RedirectTopicProjectID = config.ProjectID
+	}
+
+	if config.RedirectOnly && config.RedirectTopicID == "" {
+		logError("redirect-only requires -redirect-topic or PUBSUB_REDIRECT_TOPIC_ID")
+		os.Exit(1)
+	}
+
+	if config.RedirectPublishTimeout <= 0 {
+		logError("redirect-publish-timeout must be greater than 0")
+		os.Exit(1)
+	}
+
+	if config.MaxOutstandingMessages <= 0 {
+		logError("max-outstanding-messages must be greater than 0")
+		os.Exit(1)
+	}
+
+	if config.ProcessDelay < 0 {
+		logError("process-delay cannot be negative")
+		os.Exit(1)
+	}
+
+	if config.MaxProcessRate < 0 {
+		logError("max-process-rate cannot be negative")
+		os.Exit(1)
+	}
+
+	config.OutputFormat = strings.ToLower(strings.TrimSpace(config.OutputFormat))
+	if config.OutputFormat != "ndjson" && config.OutputFormat != "legacy" {
+		logError("output-format must be either 'ndjson' or 'legacy'")
+		os.Exit(1)
+	}
+
+	if config.MaxProcessRate > 0 {
+		interval := time.Duration(float64(time.Second) / config.MaxProcessRate)
+		if interval < time.Microsecond {
+			interval = time.Microsecond
+		}
+		rateTicker = time.NewTicker(interval)
+		rateTickCh = rateTicker.C
+		defer rateTicker.Stop()
+	}
 
 	// Parse exclude fields
 	fieldsToExclude = make(map[string]struct{})
@@ -209,7 +307,7 @@ func main() {
 	}
 
 	// Initialize output writer (unless dry-run)
-	if !config.DryRun {
+	if !config.DryRun && !config.RedirectOnly {
 		var err error
 		outputWriter, err = NewOutputWriter(config.OutputFile)
 		if err != nil {
@@ -230,6 +328,34 @@ func main() {
 		os.Exit(1)
 	}
 	defer client.Close()
+
+	if config.RedirectTopicID != "" {
+		redirectTopic = client.TopicInProject(config.RedirectTopicID, config.RedirectTopicProjectID)
+		exists, err := redirectTopic.Exists(ctx)
+		if err != nil {
+			logError("Failed to validate redirect topic %s/%s: %v", config.RedirectTopicProjectID, config.RedirectTopicID, err)
+			os.Exit(1)
+		}
+		if !exists {
+			logError("Redirect topic does not exist: %s/%s", config.RedirectTopicProjectID, config.RedirectTopicID)
+			os.Exit(1)
+		}
+		defer redirectTopic.Stop()
+		logInfo("Redirect enabled to topic %s/%s", config.RedirectTopicProjectID, config.RedirectTopicID)
+		if config.RedirectOnly {
+			logInfo("Redirect-only mode enabled; output file writes are disabled")
+		}
+	}
+
+	if config.ProcessDelay > 0 {
+		logInfo("Processing delay enabled: %v per message", config.ProcessDelay)
+	}
+	if config.MaxProcessRate > 0 {
+		logInfo("Processing rate limit enabled: %.2f msg/s", config.MaxProcessRate)
+	}
+	if config.OutputFormat == "legacy" {
+		logWarning("Legacy output format enabled; use -output-format ndjson for replay-safe records")
+	}
 
 	sub, cleanup, err := prepareSubscription(ctx, client)
 	if err != nil {
@@ -264,8 +390,13 @@ func main() {
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		sub.ReceiveSettings.MaxOutstandingMessages = 100
+		sub.ReceiveSettings.MaxOutstandingMessages = config.MaxOutstandingMessages
 		err := sub.Receive(ctx, func(ctx context.Context, m *pubsub.Message) {
+			if !waitForProcessingWindow(ctx) {
+				m.Nack()
+				return
+			}
+
 			// Increment first so we know which ordinal this message is
 			count := atomic.AddInt64(&stats.MessagesReceived, 1)
 
@@ -279,7 +410,7 @@ func main() {
 
 			atomic.AddInt64(&stats.BytesReceived, int64(len(m.Data)))
 
-			handleMessage(m)
+			handleMessage(ctx, m)
 
 			atomic.AddInt64(&stats.MessagesProcessed, 1)
 
@@ -426,7 +557,19 @@ func prepareSubscription(ctx context.Context, client *pubsub.Client) (*pubsub.Su
 	return sub, cleanup, nil
 }
 
-func handleMessage(m *pubsub.Message) {
+func handleMessage(ctx context.Context, m *pubsub.Message) {
+	if err := redirectMessage(ctx, m); err != nil {
+		atomic.AddInt64(&stats.Errors, 1)
+		logError("Redirect publish failed: %v", err)
+		ackMessage(m)
+		return
+	}
+
+	if config.RedirectOnly {
+		ackMessage(m)
+		return
+	}
+
 	isCompressed := m.Attributes["simple-message-converter-compressed"] == "true"
 	if isCompressed {
 		atomic.AddInt64(&stats.CompressedMessages, 1)
@@ -439,12 +582,94 @@ func handleMessage(m *pubsub.Message) {
 			logVerbose("Message: %d bytes, attrs: %v", len(m.Data), m.Attributes)
 		}
 		if !config.DryRun {
-			writeMessageWithAttributes(m.Attributes, string(m.Data))
+			writeMessageWithAttributes(m, m.Data)
 		}
 	}
 
 	// Handle acknowledgment based on mode
 	ackMessage(m)
+}
+
+func redirectMessage(ctx context.Context, m *pubsub.Message) error {
+	if redirectTopic == nil {
+		return nil
+	}
+
+	publishCtx, cancel := context.WithTimeout(context.Background(), config.RedirectPublishTimeout)
+	defer cancel()
+
+	publishResult := redirectTopic.Publish(publishCtx, &pubsub.Message{
+		Data:       m.Data,
+		Attributes: copyAttributes(m.Attributes),
+	})
+
+	msgID, err := publishResult.Get(publishCtx)
+	if err != nil {
+		return fmt.Errorf("redirect publish failed (dest=%s/%s sourceMsgID=%q bytes=%d attrs=%d timeout=%v): %s: %w",
+			config.RedirectTopicProjectID,
+			config.RedirectTopicID,
+			m.ID,
+			len(m.Data),
+			len(m.Attributes),
+			config.RedirectPublishTimeout,
+			describeRedirectError(err, ctx),
+			err,
+		)
+	}
+
+	if config.Verbose {
+		logVerbose("Redirected message to %s/%s with ID %s", config.RedirectTopicProjectID, config.RedirectTopicID, msgID)
+	}
+
+	return nil
+}
+
+func describeRedirectError(err error, receiveCtx context.Context) string {
+	switch {
+	case errors.Is(err, context.Canceled):
+		if receiveCtx != nil && receiveCtx.Err() != nil {
+			return "publish context canceled (subscriber is shutting down; likely max-messages/duration/signal cancellation)"
+		}
+		return "publish context canceled"
+	case errors.Is(err, context.DeadlineExceeded):
+		return "publish confirmation timed out (consider increasing -redirect-publish-timeout)"
+	default:
+		return "publish RPC failed (check topic IAM permissions, destination topic status, and Pub/Sub quota)"
+	}
+}
+
+func copyAttributes(attrs map[string]string) map[string]string {
+	if attrs == nil {
+		return nil
+	}
+
+	copied := make(map[string]string, len(attrs))
+	for k, v := range attrs {
+		copied[k] = v
+	}
+	return copied
+}
+
+func waitForProcessingWindow(ctx context.Context) bool {
+	if config.ProcessDelay > 0 {
+		delayTimer := time.NewTimer(config.ProcessDelay)
+		defer delayTimer.Stop()
+		select {
+		case <-ctx.Done():
+			return false
+		case <-delayTimer.C:
+		}
+	}
+
+	if rateTickCh != nil {
+		select {
+		case <-ctx.Done():
+			return false
+		case <-rateTickCh:
+		}
+	}
+
+	return true
 }
 
 func ackMessage(m *pubsub.Message) {
@@ -498,7 +723,7 @@ func processCompressed(m *pubsub.Message) error {
 		}
 
 		if !config.DryRun {
-			writeMessageWithAttributes(m.Attributes, string(decompressed))
+			writeMessageWithAttributes(m, decompressed)
 		}
 		return nil
 	}
@@ -508,7 +733,7 @@ func processCompressed(m *pubsub.Message) error {
 		logVerbose("Non-JSON decompressed data (%d bytes) %v", len(decompressed), m.Attributes)
 	}
 	if !config.DryRun {
-		writeMessageWithAttributes(m.Attributes, string(decompressed))
+		writeMessageWithAttributes(m, decompressed)
 	}
 	return nil
 }
@@ -523,21 +748,53 @@ func appendLine(path, line string) {
 	}
 }
 
-// writeMessageWithAttributes writes attributes as JSON on one line, then message data on the next line
-func writeMessageWithAttributes(attrs map[string]string, data string) {
+// writeMessageWithAttributes writes in either replay-safe NDJSON or legacy two-line format.
+func writeMessageWithAttributes(m *pubsub.Message, data []byte) {
 	if outputWriter == nil {
 		return
 	}
 
+	if config.OutputFormat == "ndjson" {
+		record := StoredMessage{
+			Version:         1,
+			ReceivedAt:      time.Now().UTC().Format(time.RFC3339Nano),
+			ProjectID:       config.ProjectID,
+			SubscriptionID:  config.SubscriptionID,
+			SourceMessageID: m.ID,
+			Attributes:      copyAttributes(m.Attributes),
+			DataBase64:      base64.StdEncoding.EncodeToString(m.Data),
+		}
+
+		if !m.PublishTime.IsZero() {
+			record.PublishTime = m.PublishTime.UTC().Format(time.RFC3339Nano)
+		}
+		if m.OrderingKey != "" {
+			record.OrderingKey = m.OrderingKey
+		}
+		if m.DeliveryAttempt != nil {
+			record.DeliveryAttempt = *m.DeliveryAttempt
+		}
+
+		encoded, err := json.Marshal(record)
+		if err != nil {
+			logError("Marshal NDJSON output: %v", err)
+			atomic.AddInt64(&stats.Errors, 1)
+			return
+		}
+
+		appendLine(config.OutputFile, string(encoded))
+		return
+	}
+
 	// Write attributes as JSON
-	attrsJSON, err := json.Marshal(attrs)
+	attrsJSON, err := json.Marshal(m.Attributes)
 	if err != nil {
 		attrsJSON = []byte(fmt.Sprintf("{\"error\": \"failed to marshal attributes: %v\"}", err))
 	}
 	appendLine(config.OutputFile, "ATTRS: "+string(attrsJSON))
 
 	// Write message data
-	appendLine(config.OutputFile, data)
+	appendLine(config.OutputFile, string(data))
 }
 
 func envOrDefault(key, def string) string {
@@ -545,6 +802,48 @@ func envOrDefault(key, def string) string {
 		return v
 	}
 	return def
+}
+
+func envIntOrDefault(key string, def int) int {
+	v := strings.TrimSpace(os.Getenv(key))
+	if v == "" {
+		return def
+	}
+
+	parsed, err := strconv.Atoi(v)
+	if err != nil {
+		return def
+	}
+
+	return parsed
+}
+
+func envDurationOrDefault(key string, def time.Duration) time.Duration {
+	v := strings.TrimSpace(os.Getenv(key))
+	if v == "" {
+		return def
+	}
+
+	parsed, err := time.ParseDuration(v)
+	if err != nil {
+		return def
+	}
+
+	return parsed
+}
+
+func envFloatOrDefault(key string, def float64) float64 {
+	v := strings.TrimSpace(os.Getenv(key))
+	if v == "" {
+		return def
+	}
+
+	parsed, err := strconv.ParseFloat(v, 64)
+	if err != nil {
+		return def
+	}
+
+	return parsed
 }
 
 // getDefaultProjectID attempts to detect the GCP project ID from:
@@ -614,6 +913,14 @@ func printBanner() {
 	fmt.Printf("  %-20s %s%s%s\n", "Subscription:", colorYellow, config.SubscriptionID, colorReset)
 	fmt.Printf("  %-20s %s%s%s\n", "Topic Project:", colorYellow, config.TopicProjectID, colorReset)
 	fmt.Printf("  %-20s %s%s%s\n", "Topic:", colorYellow, config.TopicID, colorReset)
+	fmt.Printf("  %-20s %s%s%s\n", "Redirect Project:", colorYellow, config.RedirectTopicProjectID, colorReset)
+	fmt.Printf("  %-20s %s%s%s\n", "Redirect Topic:", colorYellow, config.RedirectTopicID, colorReset)
+	fmt.Printf("  %-20s %s%t%s\n", "Redirect Only:", colorYellow, config.RedirectOnly, colorReset)
+	fmt.Printf("  %-20s %s%v%s\n", "Redirect Timeout:", colorYellow, config.RedirectPublishTimeout, colorReset)
+	fmt.Printf("  %-20s %s%d%s\n", "Max Outstanding:", colorYellow, config.MaxOutstandingMessages, colorReset)
+	fmt.Printf("  %-20s %s%v%s\n", "Process Delay:", colorYellow, config.ProcessDelay, colorReset)
+	fmt.Printf("  %-20s %s%.2f msg/s%s\n", "Max Process Rate:", colorYellow, config.MaxProcessRate, colorReset)
+	fmt.Printf("  %-20s %s%s%s\n", "Output Format:", colorYellow, config.OutputFormat, colorReset)
 	fmt.Printf("  %-20s %s%s%s\n", "Output File:", colorYellow, config.OutputFile, colorReset)
 	if config.MaxMessages > 0 {
 		fmt.Printf("  %-20s %s%d%s\n", "Max Messages:", colorYellow, config.MaxMessages, colorReset)
