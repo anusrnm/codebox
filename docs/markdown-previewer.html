@@ -146,16 +146,13 @@
             flex: 1 1 auto; min-height: 0;
         }
 
-        textarea {
+        /* Monaco owns all internal editor styling; this just sizes/frames it */
+        #editor-container {
             width: 100%; height: 100%;
-            font-family: monospace; margin-bottom: 0; resize: none;
             flex: 1 1 auto; box-sizing: border-box; min-height: 0;
-            background-color: var(--textarea-bg); color: var(--textarea-fg);
             border: 1px solid var(--textarea-border);
-            padding: 12px 12px 28px 12px; font-size: 14px; line-height: 1.5;
-            tab-size: 4;
         }
-        textarea.drag-over {
+        #editor-container.drag-over {
             border-color: var(--accent); box-shadow: inset 0 0 10px rgba(76,175,80,0.3);
         }
 
@@ -271,23 +268,6 @@
         .toc-level-h5 { padding-left: 48px !important; }
         .toc-level-h6 { padding-left: 60px !important; }
 
-        /* --- Find & Replace Bar --- */
-        #find-bar {
-            display: none; gap: 6px; align-items: center;
-            padding: 6px 10px; background: var(--preview-bg);
-            border: 1px solid var(--preview-border); border-radius: 4px;
-            margin-bottom: 6px; flex-wrap: wrap;
-        }
-        #find-bar.visible { display: flex; }
-        #find-bar input[type="text"] {
-            padding: 6px 8px; font-size: 14px; border-radius: 4px;
-            border: 1px solid var(--preview-border);
-            background: var(--textarea-bg); color: var(--textarea-fg);
-            min-width: 140px;
-        }
-        #find-bar button { padding: 6px 10px; font-size: 13px; }
-        #find-count { font-size: 13px; color: #888; min-width: 60px; }
-
         /* --- Toast --- */
         #toast-container {
             position: fixed; bottom: 20px; right: 20px; z-index: 1000;
@@ -320,9 +300,8 @@
         .zen-mode .toolbar,
         .zen-mode #toc-toggle,
         .zen-mode #toc-panel,
-        .zen-mode #find-bar,
         .zen-mode .input-stats { display: none !important; }
-        .zen-mode .main-content textarea,
+        .zen-mode .main-content #editor-container,
         .zen-mode .main-content #preview {
             height: 100% !important;
         }
@@ -330,7 +309,7 @@
         /* --- Responsive --- */
         @media (max-width: 900px) {
             .main-content { flex-direction: column; }
-            textarea, #preview, .input-wrapper { min-width: 0; width: 100%; min-height: 200px; }
+            #editor-container, #preview, .input-wrapper { min-width: 0; width: 100%; min-height: 200px; }
             #resizer { display: none; }
             .toolbar { gap: 4px; }
             .toolbar button { padding: 6px 10px; font-size: 13px; }
@@ -358,7 +337,7 @@
                 -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important;
             }
             .toolbar, .input-wrapper, #resizer, #toc-panel, #toc-toggle,
-            #find-bar, .input-stats, #toast-container, #loading-overlay {
+            .input-stats, #toast-container, #loading-overlay {
                 display: none !important;
             }
             .main-content {
@@ -447,22 +426,9 @@
         </select>
     </div>
 
-    <!-- Find & Replace bar -->
-    <div id="find-bar" role="search" aria-label="Find and replace">
-        <input type="text" id="find-input" placeholder="Find..." aria-label="Find text">
-        <button id="find-prev-btn" title="Previous match" aria-label="Previous match">&larr;</button>
-        <button id="find-next-btn" title="Next match" aria-label="Next match">&rarr;</button>
-        <span id="find-count" aria-live="polite"></span>
-        <input type="text" id="replace-input" placeholder="Replace..." aria-label="Replace text">
-        <button id="replace-btn" title="Replace current" aria-label="Replace">Replace</button>
-        <button id="replace-all-btn" title="Replace all" aria-label="Replace all">All</button>
-        <button id="find-close-btn" title="Close find bar" aria-label="Close find bar">&times;</button>
-    </div>
-
     <div class="main-content">
         <div class="input-wrapper">
-            <label for="markdown-input" class="sr-only" style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0)">Markdown input</label>
-            <textarea id="markdown-input" placeholder="Write Markdown here..." aria-label="Markdown input"></textarea>
+            <div id="editor-container" role="textbox" aria-label="Markdown input"></div>
             <div class="input-stats" aria-live="polite">
                 <span id="word-count" title="Word count">&#9998; 0</span>
                 <span id="char-count" title="Character count">Aa 0</span>
@@ -473,9 +439,11 @@
         <section id="preview" aria-label="Markdown preview"></section>
     </div>
 
+    <script src="https://cdn.jsdelivr.net/npm/monaco-editor@0.56.0/min/vs/loader.js"></script>
     <script>
-    document.addEventListener('DOMContentLoaded', function () {
-        const markdownInput = document.getElementById('markdown-input');
+    require.config({ paths: { vs: 'https://cdn.jsdelivr.net/npm/monaco-editor@0.56.0/min/vs' } });
+    require(['vs/editor/editor.main'], function () {
+        const editorContainer = document.getElementById('editor-container');
         const preview = document.getElementById('preview');
         const copyBtn = document.getElementById('copy-btn');
         const wordCount = document.getElementById('word-count');
@@ -494,17 +462,36 @@
         const tocList = document.getElementById('toc-list');
         const toastContainer = document.getElementById('toast-container');
         const resizer = document.getElementById('resizer');
-        const findBar = document.getElementById('find-bar');
-        const findInput = document.getElementById('find-input');
-        const replaceInput = document.getElementById('replace-input');
-        const findNextBtn = document.getElementById('find-next-btn');
-        const findPrevBtn = document.getElementById('find-prev-btn');
-        const replaceBtn = document.getElementById('replace-btn');
-        const replaceAllBtn = document.getElementById('replace-all-btn');
-        const findCloseBtn = document.getElementById('find-close-btn');
-        const findCount = document.getElementById('find-count');
         const loadingOverlay = document.getElementById('loading-overlay');
         let filenameWasEdited = localStorage.getItem('markdownFilenameCustom') === 'true';
+
+        // Monaco theme mirroring the app's own theme switcher (kept per requirements)
+        monaco.editor.defineTheme('solarized', {
+            base: 'vs',
+            inherit: true,
+            rules: [],
+            colors: { 'editor.background': '#fdf6e3', 'editor.foreground': '#586e75' }
+        });
+        function getMonacoTheme(theme) {
+            if (theme === 'dark') return 'vs-dark';
+            if (theme === 'high-contrast') return 'hc-black';
+            if (theme === 'solarized') return 'solarized';
+            return 'vs';
+        }
+
+        const editor = monaco.editor.create(editorContainer, {
+            value: localStorage.getItem('markdownInput') || '',
+            language: 'markdown',
+            automaticLayout: true,
+            wordWrap: 'on'
+        });
+
+        function insertTextAtCursor(text) {
+            const position = editor.getPosition();
+            const range = new monaco.Range(position.lineNumber, position.column, position.lineNumber, position.column);
+            editor.executeEdits('insert-content', [{ range: range, text: text, forceMoveMarkers: true }]);
+            editor.focus();
+        }
 
         function deriveFilename(markdownText) {
             const titleMatch = markdownText.match(/^\s*#\s+(.+?)\s*#*\s*$/m);
@@ -539,52 +526,18 @@
             }, duration);
         }
 
-        // --- Undo history ---
-        const undoStack = [];
-        const redoStack = [];
-        let lastSnapshot = '';
-        function pushUndo() {
-            const val = markdownInput.value;
-            if (val !== lastSnapshot) {
-                undoStack.push(lastSnapshot);
-                if (undoStack.length > 100) undoStack.shift();
-                redoStack.length = 0;
-                lastSnapshot = val;
-            }
-        }
-        function performUndo() {
-            if (undoStack.length === 0) return;
-            redoStack.push(markdownInput.value);
-            markdownInput.value = undoStack.pop();
-            lastSnapshot = markdownInput.value;
-            renderMarkdown();
-        }
-        function performRedo() {
-            if (redoStack.length === 0) return;
-            undoStack.push(markdownInput.value);
-            markdownInput.value = redoStack.pop();
-            lastSnapshot = markdownInput.value;
-            renderMarkdown();
-        }
-
         // Debounce rendering
         let renderTimeout;
         function debounceRenderMarkdown() {
             clearTimeout(renderTimeout);
-            renderTimeout = setTimeout(function() {
-                pushUndo();
-                renderMarkdown();
-            }, 200);
+            renderTimeout = setTimeout(renderMarkdown, 200);
         }
 
-        // Load from localStorage
-        if (localStorage.getItem('markdownInput')) {
-            markdownInput.value = localStorage.getItem('markdownInput');
-        }
-        lastSnapshot = markdownInput.value;
+        // Load remembered filename
         if (localStorage.getItem('markdownFilename')) {
             filenameInput.value = localStorage.getItem('markdownFilename');
         }
+
 
         // Override marked renderer to add copy buttons to pre blocks
         const renderer = new marked.Renderer();
@@ -621,7 +574,7 @@
         // Render Markdown
         async function renderMarkdown() {
             const start = performance.now();
-            const markdownText = markdownInput.value;
+            const markdownText = editor.getValue();
             localStorage.setItem('markdownInput', markdownText);
             updateFilenameFromTitle(markdownText);
             const htmlContent = marked.parse(markdownText);
@@ -693,7 +646,7 @@
         });
 
         // Event listener for real-time rendering (debounced)
-        markdownInput.addEventListener('input', debounceRenderMarkdown);
+        editor.onDidChangeModelContent(debounceRenderMarkdown);
 
         // Copy HTML button
         copyBtn.addEventListener('click', function() {
@@ -706,6 +659,7 @@
         function setTheme(theme) {
             document.body.classList.remove('theme-light', 'theme-dark', 'theme-solarized', 'theme-high-contrast');
             document.body.classList.add('theme-' + theme);
+            monaco.editor.setTheme(getMonacoTheme(theme));
             localStorage.setItem('theme', theme);
             initializeMermaid(theme);
         }
@@ -758,7 +712,7 @@
             let filename = filenameInput.value.trim();
             if (!filename) filename = 'document.md';
             if (!filename.endsWith('.md')) filename += '.md';
-            const blob = new Blob([markdownInput.value], { type: 'text/markdown' });
+            const blob = new Blob([editor.getValue()], { type: 'text/markdown' });
             const a = document.createElement('a');
             a.href = URL.createObjectURL(blob);
             a.download = filename;
@@ -799,12 +753,11 @@
             const file = openFileInput.files[0];
             if (!file) return;
             file.text().then(function(text) {
-                markdownInput.value = text;
+                editor.setValue(text);
                 filenameInput.value = file.name;
                 filenameWasEdited = true;
                 localStorage.setItem('markdownFilenameCustom', 'true');
                 localStorage.setItem('markdownFilename', file.name);
-                pushUndo();
                 renderMarkdown();
                 showToast('Opened: ' + file.name);
             });
@@ -831,9 +784,10 @@
             const rect = container.getBoundingClientRect();
             const offset = e.clientX - rect.left;
             const pct = Math.min(Math.max((offset / rect.width) * 100, 15), 85);
-            const inputWrapper = markdownInput.closest('.input-wrapper');
+            const inputWrapper = editorContainer.closest('.input-wrapper');
             inputWrapper.style.flex = '0 0 ' + pct + '%';
             preview.style.flex = '0 0 ' + (100 - pct - 0.5) + '%';
+            editor.layout();
         });
         document.addEventListener('mouseup', function() {
             if (isResizing) {
@@ -844,151 +798,62 @@
         });
 
         // --- Scroll sync ---
-        markdownInput.addEventListener('scroll', function() {
-            const ratio = markdownInput.scrollTop / (markdownInput.scrollHeight - markdownInput.clientHeight || 1);
+        editor.onDidScrollChange(function(e) {
+            const scrollableHeight = editor.getScrollHeight() - editor.getLayoutInfo().height;
+            const ratio = scrollableHeight > 0 ? e.scrollTop / scrollableHeight : 0;
             preview.scrollTop = ratio * (preview.scrollHeight - preview.clientHeight);
         });
 
-        // --- Tab key support ---
-        markdownInput.addEventListener('keydown', function(e) {
-            if (e.key === 'Tab') {
+        // --- Drag and drop images (Monaco handles everything else natively) ---
+        const editorDomNode = editor.getDomNode();
+        editorDomNode.addEventListener('dragover', function(e) {
+            if (Array.from(e.dataTransfer.items || []).some(function(it) { return it.kind === 'file'; })) {
                 e.preventDefault();
-                const start = this.selectionStart;
-                const end = this.selectionEnd;
-                this.value = this.value.substring(0, start) + '    ' + this.value.substring(end);
-                this.selectionStart = this.selectionEnd = start + 4;
-                debounceRenderMarkdown();
+                editorContainer.classList.add('drag-over');
             }
         });
-
-        // --- Drag and drop images ---
-        markdownInput.addEventListener('dragover', function(e) {
-            e.preventDefault();
-            markdownInput.classList.add('drag-over');
+        editorDomNode.addEventListener('dragleave', function() {
+            editorContainer.classList.remove('drag-over');
         });
-        markdownInput.addEventListener('dragleave', function() {
-            markdownInput.classList.remove('drag-over');
-        });
-        markdownInput.addEventListener('drop', function(e) {
+        editorDomNode.addEventListener('drop', function(e) {
+            const imageFiles = Array.from(e.dataTransfer.files).filter(function(f) { return f.type.startsWith('image/'); });
+            editorContainer.classList.remove('drag-over');
+            if (imageFiles.length === 0) return;
             e.preventDefault();
-            markdownInput.classList.remove('drag-over');
-            const files = e.dataTransfer.files;
-            for (const file of files) {
-                if (!file.type.startsWith('image/')) continue;
+            e.stopPropagation();
+            imageFiles.forEach(function(file) {
                 const reader = new FileReader();
                 reader.onload = function(ev) {
-                    const dataUri = ev.target.result;
-                    const mdImg = '![' + file.name + '](' + dataUri + ')\n';
-                    const pos = markdownInput.selectionStart;
-                    markdownInput.value = markdownInput.value.substring(0, pos) + mdImg + markdownInput.value.substring(pos);
-                    pushUndo();
-                    renderMarkdown();
+                    insertTextAtCursor('![' + file.name + '](' + ev.target.result + ')\n');
                     showToast('Image inserted: ' + file.name);
                 };
                 reader.readAsDataURL(file);
-            }
-        });
+            });
+        }, true);
 
-        // --- Paste images ---
-        markdownInput.addEventListener('paste', function(e) {
+        // --- Paste images (Monaco handles regular text paste natively) ---
+        editorDomNode.addEventListener('paste', function(e) {
             const items = e.clipboardData && e.clipboardData.items;
             if (!items) return;
-            for (const item of items) {
-                if (!item.type.startsWith('image/')) continue;
-                e.preventDefault();
-                const file = item.getAsFile();
-                const reader = new FileReader();
-                reader.onload = function(ev) {
-                    const dataUri = ev.target.result;
-                    const mdImg = '![pasted-image](' + dataUri + ')\n';
-                    const pos = markdownInput.selectionStart;
-                    markdownInput.value = markdownInput.value.substring(0, pos) + mdImg + markdownInput.value.substring(pos);
-                    pushUndo();
-                    renderMarkdown();
-                    showToast('Image pasted');
-                };
-                reader.readAsDataURL(file);
-            }
-        });
+            const imageItem = Array.from(items).find(function(it) { return it.type.startsWith('image/'); });
+            if (!imageItem) return;
+            e.preventDefault();
+            e.stopPropagation();
+            const file = imageItem.getAsFile();
+            const reader = new FileReader();
+            reader.onload = function(ev) {
+                insertTextAtCursor('![pasted-image](' + ev.target.result + ')\n');
+                showToast('Image pasted');
+            };
+            reader.readAsDataURL(file);
+        }, true);
 
-        // --- Find & Replace ---
-        let findMatches = [];
-        let findIndex = -1;
-
-        function openFindBar() {
-            findBar.classList.add('visible');
-            findInput.focus();
-        }
-        function closeFindBar() {
-            findBar.classList.remove('visible');
-            findMatches = [];
-            findIndex = -1;
-            findCount.textContent = '';
-        }
-        findCloseBtn.addEventListener('click', closeFindBar);
-
-        function doFind() {
-            const query = findInput.value;
-            if (!query) { findMatches = []; findIndex = -1; findCount.textContent = ''; return; }
-            const text = markdownInput.value;
-            findMatches = [];
-            let idx = text.indexOf(query);
-            while (idx !== -1) {
-                findMatches.push(idx);
-                idx = text.indexOf(query, idx + 1);
-            }
-            findCount.textContent = findMatches.length + ' found';
-            if (findMatches.length > 0) {
-                findIndex = 0;
-                highlightFindMatch();
-            }
-        }
-        function highlightFindMatch() {
-            if (findIndex < 0 || findIndex >= findMatches.length) return;
-            const pos = findMatches[findIndex];
-            markdownInput.focus();
-            markdownInput.setSelectionRange(pos, pos + findInput.value.length);
-            findCount.textContent = (findIndex + 1) + '/' + findMatches.length;
-        }
-        findInput.addEventListener('input', doFind);
-        findNextBtn.addEventListener('click', function() {
-            if (findMatches.length === 0) return;
-            findIndex = (findIndex + 1) % findMatches.length;
-            highlightFindMatch();
-        });
-        findPrevBtn.addEventListener('click', function() {
-            if (findMatches.length === 0) return;
-            findIndex = (findIndex - 1 + findMatches.length) % findMatches.length;
-            highlightFindMatch();
-        });
-        replaceBtn.addEventListener('click', function() {
-            if (findMatches.length === 0 || findIndex < 0) return;
-            const pos = findMatches[findIndex];
-            const query = findInput.value;
-            const repl = replaceInput.value;
-            pushUndo();
-            markdownInput.value = markdownInput.value.substring(0, pos) + repl + markdownInput.value.substring(pos + query.length);
-            renderMarkdown();
-            doFind();
-        });
-        replaceAllBtn.addEventListener('click', function() {
-            const query = findInput.value;
-            if (!query) return;
-            pushUndo();
-            markdownInput.value = markdownInput.value.split(query).join(replaceInput.value);
-            renderMarkdown();
-            doFind();
-            showToast('All replaced');
-        });
-
-        // --- Keyboard shortcuts ---
+        // --- Keyboard shortcuts (Monaco owns find/replace, undo/redo, tab indent by default) ---
         const shortcutMap = {
             's': function() { saveBtn.click(); },
-            'p': function() { printBtn.click(); },
-            'f': function() { openFindBar(); },
-            'h': function() { openFindBar(); replaceInput.focus(); }
+            'p': function() { printBtn.click(); }
         };
-        function handleCtrlShortcuts(e) {
+        document.addEventListener('keydown', function(e) {
             if (!e.ctrlKey) return;
             if (e.shiftKey && e.key === 'C') {
                 e.preventDefault();
@@ -999,21 +864,6 @@
             if (action) {
                 e.preventDefault();
                 action();
-                return;
-            }
-            if (document.activeElement !== markdownInput) return;
-            if (!e.shiftKey && e.key === 'z') {
-                e.preventDefault();
-                performUndo();
-            } else if ((e.shiftKey && e.key === 'Z') || e.key === 'y') {
-                e.preventDefault();
-                performRedo();
-            }
-        }
-        document.addEventListener('keydown', function(e) {
-            handleCtrlShortcuts(e);
-            if (e.key === 'Escape') {
-                closeFindBar();
             }
         });
 
@@ -1024,3 +874,4 @@
 
 </body>
 </html>
+
