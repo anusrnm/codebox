@@ -87,3 +87,5 @@ logs/
 uploads/
 target/
 messages.txt
+.playwright-mcp/
+test-results/

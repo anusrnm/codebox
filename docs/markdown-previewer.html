@@ -323,18 +323,17 @@
             html, body {
                 margin: 0 !important;
                 padding: 0 !important;
-                background: #fff !important;
-                color: #111 !important;
                 display: block !important;
                 height: auto !important;
+                -webkit-print-color-adjust: exact !important;
+                print-color-adjust: exact !important;
             }
             #preview input[type="checkbox"] {
                 width: 16px !important; height: 16px !important;
-                background: #fff !important; border: 2px solid var(--accent) !important;
+                background: var(--preview-bg) !important; border: 2px solid var(--accent) !important;
             }
             #preview input[type="checkbox"]:checked {
                 background: var(--accent) !important; border-color: var(--accent) !important;
-                -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important;
             }
             .toolbar, .input-wrapper, #resizer, #toc-panel, #toc-toggle,
             .input-stats, #toast-container, #loading-overlay {
@@ -347,20 +346,13 @@
             }
             #preview {
                 display: block !important; width: 100% !important;
-                min-height: 0 !important; box-shadow: none !important;
-                border: none !important; background: none !important;
-                color: #111 !important; height: auto !important; max-height: none !important;
+                min-height: 0 !important;
+                border: none !important;
+                height: auto !important; max-height: none !important;
                 padding: 0 !important; overflow: visible !important; flex: none !important;
             }
-            #preview, #preview h1, #preview h2, #preview h3, #preview h4, #preview h5, #preview h6,
-            #preview p, #preview li, #preview td, #preview th, #preview blockquote {
-                color: #111 !important;
-            }
             #preview > :first-child { margin-top: 0 !important; }
-            #preview td { background-color: transparent !important; }
             #preview pre, #preview code {
-                color: #111 !important;
-                background: #f3f3f3 !important;
                 white-space: pre-wrap !important; word-break: break-word !important;
                 overflow: visible !important; max-width: 100% !important;
             }
@@ -372,11 +364,6 @@
             }
             #preview * { page-break-after: auto; page-break-inside: avoid; }
             .pre-copy-btn { display: none !important; }
-            #preview blockquote {
-                background-color: #f3f3f3 !important;
-                border-left: 5px solid #777 !important;
-            }
-            #preview th { background-color: #e6e6e6 !important; }
         }
 
         /* Pre copy button */
