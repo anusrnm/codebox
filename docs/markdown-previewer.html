@@ -504,6 +504,27 @@
         const findCloseBtn = document.getElementById('find-close-btn');
         const findCount = document.getElementById('find-count');
         const loadingOverlay = document.getElementById('loading-overlay');
+        let filenameWasEdited = localStorage.getItem('markdownFilenameCustom') === 'true';
+
+        function deriveFilename(markdownText) {
+            const titleMatch = markdownText.match(/^\s*#\s+(.+?)\s*#*\s*$/m);
+            const title = titleMatch ? titleMatch[1]
+                .replace(/`([^`]+)`/g, '$1')
+                .replace(/[*_~]/g, '')
+                .replace(/<[^>]*>/g, '') : '';
+            const slug = title.normalize('NFKD')
+                .replace(/[\u0300-\u036f]/g, '')
+                .replace(/[^\p{L}\p{N}]+/gu, '-')
+                .replace(/^-+|-+$/g, '')
+                .toLowerCase()
+                .slice(0, 80)
+                .replace(/-+$/g, '');
+            return (slug || 'document') + '.md';
+        }
+
+        function updateFilenameFromTitle(markdownText) {
+            if (!filenameWasEdited) filenameInput.value = deriveFilename(markdownText);
+        }
 
         // --- Toast notification system ---
         function showToast(message, duration = 2000) {
@@ -582,13 +603,27 @@
             return '<pre style="position:relative"><button class="pre-copy-btn" title="Copy code to clipboard">Copy</button><code' + langClass + '>' + escaped + '</code></pre>';
         };
         marked.setOptions({ renderer: renderer });
-        globalThis.mermaid.initialize({ startOnLoad: false, securityLevel: 'strict' });
+
+        function getMermaidTheme(theme) {
+            if (theme === 'dark' || theme === 'high-contrast') return 'dark';
+            if (theme === 'solarized') return 'neutral';
+            return 'default';
+        }
+
+        function initializeMermaid(theme) {
+            globalThis.mermaid.initialize({
+                startOnLoad: false,
+                securityLevel: 'strict',
+                theme: getMermaidTheme(theme)
+            });
+        }
 
         // Render Markdown
         async function renderMarkdown() {
             const start = performance.now();
             const markdownText = markdownInput.value;
             localStorage.setItem('markdownInput', markdownText);
+            updateFilenameFromTitle(markdownText);
             const htmlContent = marked.parse(markdownText);
             preview.innerHTML = DOMPurify.sanitize(htmlContent);
 
@@ -660,9 +695,6 @@
         // Event listener for real-time rendering (debounced)
         markdownInput.addEventListener('input', debounceRenderMarkdown);
 
-        // Initial render
-        renderMarkdown();
-
         // Copy HTML button
         copyBtn.addEventListener('click', function() {
             navigator.clipboard.writeText(preview.innerHTML)
@@ -675,13 +707,18 @@
             document.body.classList.remove('theme-light', 'theme-dark', 'theme-solarized', 'theme-high-contrast');
             document.body.classList.add('theme-' + theme);
             localStorage.setItem('theme', theme);
+            initializeMermaid(theme);
         }
         themeSelect.addEventListener('change', function() {
             setTheme(themeSelect.value);
+            renderMarkdown();
         });
         const savedTheme = localStorage.getItem('theme') || 'light';
         themeSelect.value = savedTheme;
         setTheme(savedTheme);
+
+        // Initial render
+        renderMarkdown();
 
         // Print button (fix: use afterprint event to remove class reliably)
         printBtn.addEventListener('click', function() {
@@ -702,11 +739,15 @@
         });
         filenameInput.addEventListener('blur', function() {
             filenameInput.readOnly = true;
+            filenameWasEdited = true;
+            localStorage.setItem('markdownFilenameCustom', 'true');
             localStorage.setItem('markdownFilename', filenameInput.value);
         });
         filenameInput.addEventListener('keydown', function(e) {
             if (e.key === 'Enter') {
                 filenameInput.readOnly = true;
+                filenameWasEdited = true;
+                localStorage.setItem('markdownFilenameCustom', 'true');
                 localStorage.setItem('markdownFilename', filenameInput.value);
                 saveBtn.focus();
             }
@@ -760,6 +801,8 @@
             file.text().then(function(text) {
                 markdownInput.value = text;
                 filenameInput.value = file.name;
+                filenameWasEdited = true;
+                localStorage.setItem('markdownFilenameCustom', 'true');
                 localStorage.setItem('markdownFilename', file.name);
                 pushUndo();
                 renderMarkdown();
