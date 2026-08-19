@@ -23,6 +23,9 @@
         integrity="sha384-RH2xi4eIQ/gjtbs9fUXM68sLSi99C7ZWBRX1vDrVv6GQXRibxXLbwO2NGZB74MbU"
         crossorigin="anonymous"></script>
 
+    <!-- Mermaid diagram renderer (pinned) -->
+    <script src="https://cdn.jsdelivr.net/npm/mermaid@11.16.1/dist/mermaid.min.js"></script>
+
     <style>
         /* --- CSS Custom Properties --- */
         :root {
@@ -195,6 +198,8 @@
             color: var(--blockquote-fg); padding: 3px 12px; margin: 5px 0;
         }
         #preview blockquote p { margin-top: 5px; margin-bottom: 5px; }
+        #preview .mermaid { overflow-x: auto; text-align: center; }
+        #preview .mermaid svg { max-width: 100%; height: auto; }
 
         /* --- Toolbar --- */
         .toolbar {
@@ -335,6 +340,15 @@
 
         /* --- Print --- */
         @media print {
+            @page { margin: 5mm 10mm 10mm; }
+            html, body {
+                margin: 0 !important;
+                padding: 0 !important;
+                background: #fff !important;
+                color: #111 !important;
+                display: block !important;
+                height: auto !important;
+            }
             #preview input[type="checkbox"] {
                 width: 16px !important; height: 16px !important;
                 background: #fff !important; border: 2px solid var(--accent) !important;
@@ -343,18 +357,31 @@
                 background: var(--accent) !important; border-color: var(--accent) !important;
                 -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important;
             }
-            .toolbar, .main-content textarea, #resizer, #toc-panel, #toc-toggle,
+            .toolbar, .input-wrapper, #resizer, #toc-panel, #toc-toggle,
             #find-bar, .input-stats, #toast-container, #loading-overlay {
                 display: none !important;
             }
+            .main-content {
+                display: block !important;
+                min-height: 0 !important;
+                flex: none !important;
+            }
             #preview {
                 display: block !important; width: 100% !important;
-                min-height: 100vh !important; box-shadow: none !important;
+                min-height: 0 !important; box-shadow: none !important;
                 border: none !important; background: none !important;
-                color: inherit !important; height: auto !important; max-height: none !important;
+                color: #111 !important; height: auto !important; max-height: none !important;
+                padding: 0 !important; overflow: visible !important; flex: none !important;
             }
+            #preview, #preview h1, #preview h2, #preview h3, #preview h4, #preview h5, #preview h6,
+            #preview p, #preview li, #preview td, #preview th, #preview blockquote {
+                color: #111 !important;
+            }
+            #preview > :first-child { margin-top: 0 !important; }
             #preview td { background-color: transparent !important; }
             #preview pre, #preview code {
+                color: #111 !important;
+                background: #f3f3f3 !important;
                 white-space: pre-wrap !important; word-break: break-word !important;
                 overflow: visible !important; max-width: 100% !important;
             }
@@ -367,10 +394,10 @@
             #preview * { page-break-after: auto; page-break-inside: avoid; }
             .pre-copy-btn { display: none !important; }
             #preview blockquote {
-                background-color: var(--blockquote-bg) !important;
-                border-left: 5px solid var(--blockquote-border) !important;
+                background-color: #f3f3f3 !important;
+                border-left: 5px solid #777 !important;
             }
-            #preview th { background-color: var(--th-bg) !important; color: var(--th-fg) !important; }
+            #preview th { background-color: #e6e6e6 !important; }
         }
 
         /* Pre copy button */
@@ -548,13 +575,17 @@
                 .replaceAll('<', '&lt;')
                 .replaceAll('>', '&gt;')
                 .replaceAll('"', '&quot;');
+            if (lang && lang.toLowerCase() === 'mermaid') {
+                return '<pre class="mermaid">' + escaped + '</pre>';
+            }
             const langClass = lang ? ' class="language-' + lang + '"' : '';
             return '<pre style="position:relative"><button class="pre-copy-btn" title="Copy code to clipboard">Copy</button><code' + langClass + '>' + escaped + '</code></pre>';
         };
         marked.setOptions({ renderer: renderer });
+        globalThis.mermaid.initialize({ startOnLoad: false, securityLevel: 'strict' });
 
         // Render Markdown
-        function renderMarkdown() {
+        async function renderMarkdown() {
             const start = performance.now();
             const markdownText = markdownInput.value;
             localStorage.setItem('markdownInput', markdownText);
@@ -565,6 +596,12 @@
             preview.querySelectorAll('pre code').forEach(function(block) {
                 globalThis.hljs.highlightElement(block);
             });
+
+            try {
+                await globalThis.mermaid.run({ nodes: preview.querySelectorAll('.mermaid') });
+            } catch (error) {
+                console.error('Unable to render Mermaid diagram:', error);
+            }
 
             updateCounts(markdownText);
             buildTOC();
