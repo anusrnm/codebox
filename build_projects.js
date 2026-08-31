@@ -693,12 +693,40 @@ if (import.meta.main) {
     let concurrency = 4;
     let mvnArgs = null; // override for Maven arguments
 
+    function parseProjectListContent(content) {
+        const trimmed = String(content || '').trim();
+        if (!trimmed) {
+            return [];
+        }
+
+        try {
+            const parsed = JSON.parse(trimmed);
+            if (Array.isArray(parsed)) {
+                return parsed;
+            }
+        } catch {
+            // Fall through to newline-delimited parsing below.
+        }
+
+        const lines = trimmed
+            .split(/\r?\n/)
+            .map(line => line.trim())
+            .filter(Boolean);
+
+        if (lines.length > 0) {
+            return lines;
+        }
+
+        throw new Error('Expected a JSON array or a newline-delimited list of project directories.');
+    }
+
     function printUsage() {
         console.log(`\nUsage:`);
         console.log(` build_projects.js '["dir1","dir2"]' [--quiet] [--dry-run] [--all-parallel] [--concurrency=N]`);
         console.log(` build_projects.js --file projects.json [--quiet] [--dry-run] [--all-parallel] [--concurrency=N]`);
+        console.log(` build_projects.js --file projects.txt [--quiet] [--dry-run] [--all-parallel] [--concurrency=N]`);
         console.log(`\nArguments:`);
-        console.log(`  JSON string or --file <jsonfile> containing an array of directories or arrays of directories.`);
+        console.log(`  JSON string, JSON file, or --file <file> containing either a JSON array or one project directory per line.`);
         console.log(`  --quiet: Suppress per-project output, only show summary.`);
         console.log(`  --dry-run: Print what would be built, do not run Maven.`);
         console.log(`  --all-parallel: Build all projects in parallel, regardless of input structure.`);
@@ -745,7 +773,7 @@ if (import.meta.main) {
     if (filteredArgs[0] === '--file' && filteredArgs[1]) {
         try {
             const fileContent = await fs.readFile(filteredArgs[1], 'utf8');
-            directories = JSON.parse(fileContent);
+            directories = parseProjectListContent(fileContent);
         } catch (error) {
             console.error(`Failed to read or parse file: ${filteredArgs[1]}\n${error}`);
             process.exit(1);
