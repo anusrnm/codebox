@@ -1,5 +1,15 @@
 //#!/usr/bin/env bun
 // bun build ./build_projects.js --compile --outfile build_projects --minify --target node
+//
+// Sample commands:
+//   node build_projects.js '["dir1","dir2"]'
+//   node build_projects.js '["dir1",["dir2","dir3"]]' --all-parallel --concurrency=8
+//   node build_projects.js --file projects.json --quiet
+//   node build_projects.js --file projects.txt --dry-run
+//   node build_projects.js ~/workspaces/my-repos --mvnd-only
+//   node build_projects.js '["dir1","dir2"]' --mvn-args="clean install -DskipTests"
+//   node build_projects.js --file projects.txt --command='npm install && npm test'
+//   node build_projects.js '["dir1","dir2"]' --command='echo building {dir}'
 import { spawn } from "child_process";
 import { performance } from "perf_hooks";
 import path from "path";
@@ -248,21 +258,28 @@ async function detectMavenCmd(mvndOnly = false) {
     return mavenCmd;
 }
 
-// Function to run Maven command in a given directory
+// Function to run a Maven (or custom) command in a given directory
 async function runMavenCommand(dir, logFileStream, dryRun = false, lineIndex = null, lineCount = null, lineStatusArr = null, emitter = null) {
     const EventEmitter = (await import('events')).EventEmitter;
     // Always use a local emitter if not provided
     if (!emitter) emitter = new EventEmitter();
     emitter.setMaxListeners(20); // Increase if needed for high concurrency
-    const cmd = await detectMavenCmd(runMavenCommand.mvndOnly);
-    const overrideArgs = runMavenCommand.mavenArgs && String(runMavenCommand.mavenArgs).trim();
-    let args = ["-B", "clean", "install"];
-    if (!overrideArgs) {
-        if (dir.includes("container")) {
-            args = ["-B", "-Pdev-dist", "clean", "package"];
+    let fullCmd;
+    // Full custom command override, bypassing Maven entirely; supports a {dir} placeholder
+    const customCommand = runMavenCommand.command && String(runMavenCommand.command).trim();
+    if (customCommand) {
+        fullCmd = customCommand.includes('{dir}') ? customCommand.replaceAll('{dir}', dir) : customCommand;
+    } else {
+        const cmd = await detectMavenCmd(runMavenCommand.mvndOnly);
+        const overrideArgs = runMavenCommand.mavenArgs && String(runMavenCommand.mavenArgs).trim();
+        let args = ["-B", "clean", "install"];
+        if (!overrideArgs) {
+            if (dir.includes("container")) {
+                args = ["-B", "-Pdev-dist", "clean", "package"];
+            }
         }
+        fullCmd = overrideArgs ? `${cmd} ${overrideArgs}` : `${cmd} ${args.join(' ')}`;
     }
-    const fullCmd = overrideArgs ? `${cmd} ${overrideArgs}` : `${cmd} ${args.join(' ')}`;
     // Emit progress event before starting
     emitter.emit('progress', { type: 'start', dir, cmd: fullCmd });
     if (dryRun) {
@@ -552,6 +569,7 @@ async function buildInOrder(projects, quiet = false) {
         const logStream = (!quiet && !dryRun) ? (await import('fs')).createWriteStream(logFile) : null;
         runMavenCommand.mvndOnly = buildInOrder.mvndOnly || false;
         runMavenCommand.mavenArgs = buildInOrder.mavenArgs || null;
+        runMavenCommand.command = buildInOrder.command || null;
         // Always use a local emitter for this build
         const { EventEmitter } = await import('events');
         const localEmitter = new EventEmitter();
@@ -692,6 +710,7 @@ if (import.meta.main) {
     let allParallel = false;
     let concurrency = 4;
     let mvnArgs = null; // override for Maven arguments
+    let command = null; // full custom command override, replacing Maven entirely
 
     function parseProjectListContent(content) {
         const trimmed = String(content || '').trim();
@@ -731,6 +750,8 @@ if (import.meta.main) {
         console.log(`  --dry-run: Print what would be built, do not run Maven.`);
         console.log(`  --all-parallel: Build all projects in parallel, regardless of input structure.`);
         console.log(`  --concurrency=N: Limit the number of concurrent builds (default: 4).`);
+        console.log(`  --mvn-args=<args>: Override the Maven args (still runs mvn/mvnd).`);
+        console.log(`  --command=<cmd>: Run an arbitrary shell command per project instead of Maven. Use {dir} to reference the project path.`);
     }
 
     // Remove --quiet, --dry-run, --mvnd-only, --all-parallel, --concurrency if present
@@ -759,6 +780,11 @@ if (import.meta.main) {
         if (arg.startsWith('--mvn-args=')) {
             // Everything after '=' is taken as a single string of args
             mvnArgs = arg.substring('--mvn-args='.length);
+            return false;
+        }
+        if (arg.startsWith('--command=')) {
+            // Full custom command to run per project, replacing Maven entirely
+            command = arg.substring('--command='.length);
             return false;
         }
         return true;
@@ -828,6 +854,7 @@ if (import.meta.main) {
     buildInOrder.allParallel = allParallel;
     buildInOrder.concurrency = concurrency;
     buildInOrder.mavenArgs = mvnArgs;
+    buildInOrder.command = command;
 
     try {
         await buildInOrder(directories, quiet);
