@@ -31,6 +31,19 @@
     <script src="https://cdn.jsdelivr.net/npm/dompurify@3.4.14/dist/purify.min.js"
         onerror="showStartupError('Unable to load the HTML sanitizer. Check your connection and reload.')"></script>
 
+    <!-- Markdown extensions (pinned) -->
+    <script src="https://cdn.jsdelivr.net/npm/marked-footnote@1.4.0/dist/index.umd.js"
+        onerror="showStartupError('Unable to load footnote support. Check your connection and reload.')"></script>
+    <script src="https://cdn.jsdelivr.net/npm/marked-alert@2.1.2/dist/index.umd.js"
+        onerror="showStartupError('Unable to load alert support. Check your connection and reload.')"></script>
+    <script src="https://cdn.jsdelivr.net/npm/marked-emoji@2.0.3/lib/index.umd.js"
+        onerror="showStartupError('Unable to load emoji support. Check your connection and reload.')"></script>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.22/dist/katex.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/katex@0.16.22/dist/katex.min.js"
+        onerror="showStartupError('Unable to load KaTeX. Check your connection and reload.')"></script>
+    <script src="https://cdn.jsdelivr.net/npm/marked-katex-extension@5.1.12/lib/index.umd.js"
+        onerror="showStartupError('Unable to load math support. Check your connection and reload.')"></script>
+
     <!-- Highlight.js CDN (pinned, single bundle) -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.11.1/styles/default.min.css"
         integrity="sha384-4Y0nObtF3CbKnh+lpzmAVdAMtQXl+ganWiiv73RcGVdRdfVIya8Cao1C8ZsVRRDz"
@@ -47,6 +60,10 @@
     <!-- PlantUML URL encoder (pinned) -->
     <script src="https://cdn.jsdelivr.net/npm/plantuml-encoder@1.4.0/dist/plantuml-encoder.min.js"
         onerror="showStartupError('Unable to load the PlantUML encoder. Check your connection and reload.')"></script>
+
+    <!-- Lucide icons (pinned) -->
+    <script src="https://unpkg.com/lucide@0.468.0/dist/umd/lucide.min.js"
+        onerror="showStartupError('Unable to load toolbar icons. Check your connection and reload.')"></script>
 
     <style>
         /* --- CSS Custom Properties --- */
@@ -224,11 +241,39 @@
             color: var(--blockquote-fg); padding: 3px 12px; margin: 5px 0;
         }
         #preview blockquote p { margin-top: 5px; margin-bottom: 5px; }
+        #preview [data-source-line] { cursor: pointer; }
+        #preview [data-source-line]:hover { outline: 1px dashed var(--accent); outline-offset: 3px; }
         #preview .mermaid { overflow-x: auto; text-align: center; }
         #preview .mermaid svg { max-width: 100%; height: auto; }
         #preview .plantuml { margin: 16px 0; text-align: center; }
         #preview .plantuml img { display: block; max-width: 100%; height: auto; margin: 0 auto; }
         #preview .plantuml-error { color: #b42318; text-align: left; }
+        #preview dl { margin: 16px 0; }
+        #preview dt { font-weight: bold; }
+        #preview dd { margin: 4px 0 12px 24px; color: var(--para-fg); }
+        #preview .front-matter {
+            margin: 12px 0; padding: 10px 12px; border: 1px solid var(--preview-border);
+            border-radius: 4px; background: var(--th-bg);
+        }
+        #preview .front-matter summary { cursor: pointer; font-weight: bold; }
+        #preview .front-matter dl { display: grid; grid-template-columns: max-content 1fr; gap: 4px 14px; margin-bottom: 0; }
+        #preview .front-matter dd { margin: 0; }
+        #preview .markdown-alert {
+            margin: 16px 0; padding: 10px 14px; border-left: 4px solid #0969da;
+            background: color-mix(in srgb, #0969da 8%, var(--preview-bg));
+        }
+        #preview .markdown-alert-title { display: flex; align-items: center; gap: 7px; margin: 0 0 6px; font-weight: bold; color: #0969da; }
+        #preview .markdown-alert-title svg { width: 16px; height: 16px; fill: currentColor; }
+        #preview .markdown-alert-tip { border-color: #1a7f37; background: color-mix(in srgb, #1a7f37 8%, var(--preview-bg)); }
+        #preview .markdown-alert-tip .markdown-alert-title { color: #1a7f37; }
+        #preview .markdown-alert-important { border-color: #8250df; background: color-mix(in srgb, #8250df 8%, var(--preview-bg)); }
+        #preview .markdown-alert-important .markdown-alert-title { color: #8250df; }
+        #preview .markdown-alert-warning { border-color: #9a6700; background: color-mix(in srgb, #9a6700 8%, var(--preview-bg)); }
+        #preview .markdown-alert-warning .markdown-alert-title { color: #9a6700; }
+        #preview .markdown-alert-caution { border-color: #cf222e; background: color-mix(in srgb, #cf222e 8%, var(--preview-bg)); }
+        #preview .markdown-alert-caution .markdown-alert-title { color: #cf222e; }
+        #preview .footnotes { margin-top: 32px; border-top: 1px solid var(--row-border); font-size: 0.92em; }
+        #preview .katex-display { overflow-x: auto; overflow-y: hidden; padding: 4px 0; }
 
         /* --- Settings dialog --- */
         .settings-dialog {
@@ -240,29 +285,99 @@
         .settings-dialog::backdrop { background: rgba(0,0,0,0.45); }
         .settings-dialog h2 { margin: 0 0 16px; font-size: 20px; }
         .settings-dialog label { display: block; margin-bottom: 6px; font-weight: bold; }
-        .settings-dialog input {
+        .settings-dialog input, .settings-dialog select {
             width: 100%; box-sizing: border-box; padding: 9px 10px;
             border: 1px solid var(--textarea-border); border-radius: 4px;
             background: var(--textarea-bg); color: var(--textarea-fg); font-size: 14px;
         }
+        .settings-dialog label:not(:first-of-type) { margin-top: 12px; }
         .settings-dialog p { margin: 8px 0 0; font-size: 13px; }
         .settings-dialog a { color: var(--accent); }
         .settings-dialog .settings-error { color: #b42318; }
         .settings-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 20px; }
         .settings-actions .secondary { background: var(--th-bg); color: var(--fg); }
+        .diagnostics-list { list-style: none; padding: 0; margin: 12px 0 0; max-height: 50vh; overflow-y: auto; }
+        .diagnostics-list li { border-bottom: 1px solid var(--row-border); }
+        .diagnostics-list button {
+            width: 100%; padding: 10px 4px; background: transparent; color: var(--fg);
+            text-align: left; font-size: 14px;
+        }
+        .diagnostics-list button:hover { color: var(--accent); }
+        .diagnostic-line { color: var(--blockquote-fg); font-size: 12px; }
+        .shortcut-table { width: 100%; border-collapse: collapse; margin-top: 8px; }
+        .shortcut-table th, .shortcut-table td {
+            padding: 8px 4px; border-bottom: 1px solid var(--row-border); text-align: left;
+        }
+        .shortcut-table th { font-size: 12px; color: var(--blockquote-fg); text-transform: uppercase; }
+        .shortcut-table td:last-child { text-align: right; white-space: nowrap; }
+        kbd {
+            display: inline-block; min-width: 18px; padding: 2px 5px; box-sizing: border-box;
+            border: 1px solid var(--textarea-border); border-bottom-width: 2px; border-radius: 3px;
+            background: var(--th-bg); color: var(--fg); font: 12px var(--preview-code-font); text-align: center;
+        }
+        .template-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; margin-top: 12px; }
+        .template-option {
+            display: flex; align-items: flex-start; gap: 10px; min-height: 72px;
+            padding: 12px; background: var(--th-bg); color: var(--fg); text-align: left;
+            border: 1px solid var(--preview-border);
+        }
+        .template-option:hover { border-color: var(--accent); color: var(--fg); }
+        .template-option svg { flex: 0 0 auto; width: 20px; height: 20px; }
+        .template-option strong, .template-option small { display: block; }
+        .template-option small { margin-top: 4px; color: var(--blockquote-fg); }
 
         /* --- Toolbar --- */
         .toolbar {
-            display: flex; gap: 8px; align-items: center;
-            margin-bottom: 8px; flex-wrap: wrap; padding: 4px 0;
+            display: flex; gap: 6px; align-items: center;
+            margin-bottom: 8px; padding: 4px 0;
         }
-        .toolbar-group { display: flex; gap: 6px; align-items: center; }
+        .toolbar-group {
+            display: flex; gap: 2px; align-items: center; padding: 2px;
+            border: 1px solid var(--preview-border); border-radius: 5px;
+            background: var(--preview-bg);
+        }
         button {
             padding: 8px 16px; background-color: var(--accent); color: white;
             border: none; cursor: pointer; border-radius: 4px;
             transition: background 0.2s; font-size: 14px;
         }
         button:hover { background-color: var(--accent-hover); }
+        .icon-button, .toolbar-overflow > summary {
+            display: inline-flex; align-items: center; justify-content: center;
+            width: 34px; height: 34px; padding: 0; box-sizing: border-box;
+            border: 0; border-radius: 3px; background: transparent; color: var(--fg);
+            cursor: pointer;
+        }
+        .icon-button:hover, .toolbar-overflow > summary:hover,
+        .toolbar-overflow[open] > summary { background: var(--th-bg); }
+        .icon-button svg, .toolbar-overflow svg { width: 18px; height: 18px; stroke-width: 2; }
+        .icon-button { position: relative; }
+        .icon-badge {
+            position: absolute; top: 1px; right: 1px; min-width: 13px; height: 13px;
+            padding: 0 2px; border-radius: 7px; box-sizing: border-box;
+            background: var(--accent); color: #fff; font-size: 9px; line-height: 13px;
+        }
+        .sr-only {
+            position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+            overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0;
+        }
+        .toolbar-overflow { position: relative; margin-left: auto; }
+        .toolbar-overflow > summary { list-style: none; }
+        .toolbar-overflow > summary::-webkit-details-marker { display: none; }
+        .overflow-menu {
+            position: absolute; top: calc(100% + 6px); right: 0; z-index: 210;
+            width: 240px; padding: 8px; box-sizing: border-box;
+            border: 1px solid var(--preview-border); border-radius: 5px;
+            background: var(--preview-bg); color: var(--preview-fg);
+            box-shadow: 0 8px 24px rgba(0,0,0,0.18);
+        }
+        .overflow-menu button {
+            display: flex; align-items: center; gap: 9px; width: 100%;
+            padding: 8px; background: transparent; color: var(--fg); text-align: left;
+        }
+        .overflow-menu button:hover { background: var(--th-bg); }
+        .overflow-field { display: grid; grid-template-columns: 60px 1fr; gap: 8px; align-items: center; margin-top: 8px; }
+        .overflow-field label { font-size: 13px; }
         .document-bar {
             display: flex; align-items: center; gap: 6px; min-height: 38px;
             margin-bottom: 8px; border-bottom: 1px solid var(--preview-border);
@@ -287,10 +402,23 @@
             color: var(--fg); font-size: 16px; line-height: 1;
         }
         #new-document-btn { flex: 0 0 auto; padding: 6px 10px; font-size: 18px; line-height: 1; }
+        .layout-switcher {
+            display: inline-flex; margin-left: auto; padding: 2px;
+            border: 1px solid var(--preview-border); border-radius: 4px;
+            background: var(--th-bg);
+        }
+        .layout-switcher button {
+            padding: 5px 9px; border-radius: 2px; background: transparent;
+            color: var(--fg); font-size: 12px;
+        }
+        .layout-switcher button[aria-pressed="true"] { background: var(--accent); color: #fff; }
         .input-wrapper {
             position: relative; flex: 1 1 50%; display: flex; flex-direction: column;
             min-width: 0; min-height: 0;
         }
+        body.layout-editor #preview, body.layout-editor #resizer { display: none; }
+        body.layout-preview .input-wrapper, body.layout-preview #resizer { display: none; }
+        body.layout-editor .input-wrapper, body.layout-preview #preview { flex: 1 1 100% !important; }
         .input-stats {
             position: absolute; bottom: 6px; right: 12px; z-index: 2;
             display: flex; gap: 10px; align-items: center;
@@ -305,14 +433,14 @@
             letter-spacing: 0.2px;
         }
         select#theme-select, select#font-preset-select {
-            padding: 8px 12px; border-radius: 4px;
+            min-width: 0; padding: 7px 8px; border-radius: 4px;
             border: 1px solid var(--select-border);
             background: var(--select-bg); color: var(--select-fg);
             font-size: 14px; transition: background 0.2s, color 0.2s;
         }
         #filename-input {
             border: none; background: transparent; color: var(--filename-fg);
-            font-size: 14px; padding: 8px 10px; min-width: 120px;
+            width: clamp(110px, 20vw, 240px); font-size: 14px; padding: 8px 10px;
             transition: all 0.2s; cursor: pointer;
         }
         #filename-input:focus, #filename-input:not([readonly]) {
@@ -394,11 +522,14 @@
             .main-content { flex-direction: column; }
             #editor-container, #preview, .input-wrapper { min-width: 0; width: 100%; min-height: 200px; }
             #resizer { display: none; }
-            .toolbar { gap: 4px; }
-            .toolbar-group { flex-wrap: wrap; }
-            .toolbar button { padding: 6px 10px; font-size: 13px; }
+            body.layout-split .input-wrapper, body.layout-split #preview { flex: 1 1 50% !important; }
+            .toolbar { gap: 3px; flex-wrap: wrap; }
+            .toolbar-group { gap: 0; }
+            .icon-button, .toolbar-overflow > summary { width: 32px; height: 32px; }
+            #filename-input { width: min(26vw, 130px); padding-inline: 6px; }
             .document-tab-select { max-width: 150px; }
             #toc-panel { width: 200px; }
+            .template-grid { grid-template-columns: 1fr; }
             /* Hamburger: collapse toolbar into wrap */
         }
 
@@ -485,37 +616,58 @@
     <button id="zen-exit-btn" title="Exit zen mode (Escape)" aria-label="Exit zen mode">Exit Zen</button>
 
     <div class="toolbar" role="toolbar" aria-label="Editor toolbar">
-        <div class="toolbar-group">
-            <button id="open-btn" title="Open Markdown files (Ctrl+O)" aria-label="Open Markdown files">Open</button>
+        <div class="toolbar-group" role="group" aria-label="File actions">
+            <button id="open-btn" class="icon-button" title="Open Markdown files (Ctrl+O)" aria-label="Open Markdown files"><i data-lucide="folder-open"></i></button>
             <input type="file" id="open-file-input" accept=".md,.markdown,.txt" multiple hidden tabindex="-1">
             <input id="filename-input" type="text" value="document.md" title="Filename for saving" aria-label="Filename" readonly>
-            <button id="save-btn" title="Save active Markdown file (Ctrl+S)" aria-label="Save active file">Save</button>
+            <button id="save-btn" class="icon-button" title="Save active Markdown file (Ctrl+S)" aria-label="Save active file"><i data-lucide="save"></i></button>
+            <button id="workspace-btn" class="icon-button" title="Back up or restore the workspace" aria-label="Back up or restore workspace"><i data-lucide="archive"></i></button>
         </div>
-        <div class="toolbar-group">
-            <button id="copy-btn" title="Copy rendered HTML to clipboard (Ctrl+Shift+C)" aria-label="Copy HTML">Copy HTML</button>
-            <button id="export-html-btn" title="Export preview as standalone HTML file" aria-label="Export HTML">Export HTML</button>
-            <button id="print-btn" title="Print preview (Ctrl+P)" aria-label="Print">Print</button>
+        <div class="toolbar-group" role="group" aria-label="Export actions">
+            <button id="copy-btn" class="icon-button" title="Copy rendered HTML (Ctrl+Shift+C)" aria-label="Copy HTML"><i data-lucide="copy"></i></button>
+            <button id="export-html-btn" class="icon-button" title="Export standalone HTML" aria-label="Export HTML"><i data-lucide="file-code-2"></i></button>
+            <button id="print-btn" class="icon-button" title="Export PDF (Ctrl+P)" aria-label="Export PDF"><i data-lucide="file-down"></i></button>
         </div>
-        <div class="toolbar-group">
-            <button id="zen-btn" title="Toggle zen mode (distraction-free)" aria-label="Toggle zen mode">Zen</button>
-            <button id="toc-toggle" title="Toggle Table of Contents" aria-label="Toggle Table of Contents"
-                aria-controls="toc-panel" aria-expanded="false">TOC</button>
-            <button id="plantuml-settings-btn" title="Choose PlantUML server" aria-label="Choose PlantUML server">PlantUML</button>
-            <label for="font-preset-select" id="font-preset-label">Fonts:</label>
-            <select id="font-preset-select" title="Choose preview font combination" aria-labelledby="font-preset-label">
-                <option value="modern">Modern</option>
-                <option value="editorial">Editorial</option>
-                <option value="classic">Classic</option>
-                <option value="technical">Technical</option>
-            </select>
-            <label for="theme-select" id="theme-label">Theme:</label>
-            <select id="theme-select" title="Choose preview theme" aria-labelledby="theme-label">
-                <option value="light">Light</option>
-                <option value="dark">Dark</option>
-                <option value="solarized">Solarized</option>
-                <option value="high-contrast">High Contrast</option>
-            </select>
+        <div class="toolbar-group" role="group" aria-label="View actions">
+            <button id="zen-btn" class="icon-button" title="Toggle zen mode" aria-label="Toggle zen mode"><i data-lucide="expand"></i></button>
+            <button id="toc-toggle" class="icon-button" title="Toggle table of contents" aria-label="Toggle Table of Contents"
+                aria-controls="toc-panel" aria-expanded="false"><i data-lucide="list-tree"></i></button>
+            <button id="diagnostics-btn" class="icon-button" title="Review Markdown diagnostics" aria-label="Review Markdown diagnostics">
+                <i data-lucide="circle-check-big"></i><span id="diagnostics-count" class="icon-badge">0</span>
+            </button>
         </div>
+        <details id="toolbar-overflow" class="toolbar-overflow">
+            <summary title="More tools and settings" aria-label="More tools and settings"><i data-lucide="ellipsis"></i></summary>
+            <div class="overflow-menu" role="group" aria-label="More tools and settings">
+                <button id="plantuml-settings-btn" type="button"><i data-lucide="workflow"></i>PlantUML server</button>
+                <button id="shortcuts-btn" type="button"><i data-lucide="keyboard"></i>Keyboard shortcuts</button>
+                <div class="overflow-field">
+                    <label for="font-preset-select" id="font-preset-label">Fonts</label>
+                    <select id="font-preset-select" title="Choose preview font combination" aria-labelledby="font-preset-label">
+                        <option value="modern">Modern</option>
+                        <option value="editorial">Editorial</option>
+                        <option value="classic">Classic</option>
+                        <option value="technical">Technical</option>
+                    </select>
+                </div>
+                <div class="overflow-field">
+                    <label for="theme-select" id="theme-label">Theme</label>
+                    <select id="theme-select" title="Choose preview theme" aria-labelledby="theme-label">
+                        <option value="light">Light</option>
+                        <option value="dark">Dark</option>
+                        <option value="solarized">Solarized</option>
+                        <option value="high-contrast">High Contrast</option>
+                    </select>
+                </div>
+                <div class="overflow-field">
+                    <label for="profile-select" id="profile-label">Profile</label>
+                    <select id="profile-select" title="Choose Markdown parsing profile" aria-labelledby="profile-label">
+                        <option value="gfm">GitHub</option>
+                        <option value="commonmark">CommonMark</option>
+                    </select>
+                </div>
+            </div>
+        </details>
     </div>
 
     <dialog id="plantuml-settings-dialog" class="settings-dialog" aria-labelledby="plantuml-settings-title">
@@ -535,9 +687,94 @@
         </form>
     </dialog>
 
+    <dialog id="pdf-settings-dialog" class="settings-dialog" aria-labelledby="pdf-settings-title">
+        <form id="pdf-settings-form">
+            <h2 id="pdf-settings-title">PDF export</h2>
+            <label for="pdf-paper-size">Paper size</label>
+            <select id="pdf-paper-size" name="paperSize">
+                <option value="A4">A4</option>
+                <option value="Letter">Letter</option>
+                <option value="Legal">Legal</option>
+            </select>
+            <label for="pdf-orientation">Orientation</label>
+            <select id="pdf-orientation" name="orientation">
+                <option value="portrait">Portrait</option>
+                <option value="landscape">Landscape</option>
+            </select>
+            <label for="pdf-margin">Margins (mm)</label>
+            <input id="pdf-margin" name="margin" type="number" min="0" max="50" step="1" value="10" required>
+            <p>Choose “Save as PDF” in the browser print dialog.</p>
+            <div class="settings-actions">
+                <button class="secondary" type="button" data-close-dialog>Cancel</button>
+                <button type="submit">Continue</button>
+            </div>
+        </form>
+    </dialog>
+
+    <dialog id="diagnostics-dialog" class="settings-dialog" aria-labelledby="diagnostics-title">
+        <h2 id="diagnostics-title">Markdown diagnostics</h2>
+        <p id="diagnostics-summary"></p>
+        <ul id="diagnostics-list" class="diagnostics-list"></ul>
+        <div class="settings-actions">
+            <button type="button" data-close-dialog>Done</button>
+        </div>
+    </dialog>
+
+    <dialog id="workspace-dialog" class="settings-dialog" aria-labelledby="workspace-title">
+        <h2 id="workspace-title">Workspace backup</h2>
+        <p>Export all open documents, or restore a previous backup. Restoring replaces the current tabs.</p>
+        <p id="workspace-error" class="settings-error" role="alert" hidden></p>
+        <input id="workspace-file-input" type="file" accept="application/json,.json" hidden tabindex="-1">
+        <div class="settings-actions">
+            <button class="secondary" type="button" data-close-dialog>Cancel</button>
+            <button id="workspace-import-btn" class="secondary" type="button">Restore backup</button>
+            <button id="workspace-export-btn" type="button">Export backup</button>
+        </div>
+    </dialog>
+
+    <dialog id="shortcuts-dialog" class="settings-dialog" aria-labelledby="shortcuts-title">
+        <h2 id="shortcuts-title">Keyboard shortcuts</h2>
+        <table class="shortcut-table">
+            <thead><tr><th scope="col">Action</th><th scope="col">Shortcut</th></tr></thead>
+            <tbody>
+                <tr><td>New document</td><td><kbd>Ctrl</kbd> + <kbd>N</kbd></td></tr>
+                <tr><td>Open files</td><td><kbd>Ctrl</kbd> + <kbd>O</kbd></td></tr>
+                <tr><td>Save Markdown</td><td><kbd>Ctrl</kbd> + <kbd>S</kbd></td></tr>
+                <tr><td>Export PDF</td><td><kbd>Ctrl</kbd> + <kbd>P</kbd></td></tr>
+                <tr><td>Copy HTML</td><td><kbd>Ctrl</kbd> + <kbd>Shift</kbd> + <kbd>C</kbd></td></tr>
+                <tr><td>Shortcut help</td><td><kbd>Ctrl</kbd> + <kbd>Shift</kbd> + <kbd>/</kbd></td></tr>
+                <tr><td>Find / replace</td><td><kbd>Ctrl</kbd> + <kbd>F</kbd> / <kbd>Ctrl</kbd> + <kbd>H</kbd></td></tr>
+                <tr><td>Undo / redo</td><td><kbd>Ctrl</kbd> + <kbd>Z</kbd> / <kbd>Ctrl</kbd> + <kbd>Y</kbd></td></tr>
+                <tr><td>Switch document tabs</td><td><kbd>Left</kbd> / <kbd>Right</kbd></td></tr>
+                <tr><td>Resize split panes</td><td><kbd>Left</kbd> / <kbd>Right</kbd></td></tr>
+                <tr><td>Close panel or zen mode</td><td><kbd>Esc</kbd></td></tr>
+            </tbody>
+        </table>
+        <div class="settings-actions">
+            <button type="button" data-close-dialog>Done</button>
+        </div>
+    </dialog>
+
+    <dialog id="template-dialog" class="settings-dialog" aria-labelledby="template-title">
+        <h2 id="template-title">New document</h2>
+        <div id="template-grid" class="template-grid">
+            <button class="template-option" type="button" data-template="blank"><i data-lucide="file-plus-2"></i><span><strong>Blank</strong><small>Start with an empty document</small></span></button>
+            <button class="template-option" type="button" data-template="readme"><i data-lucide="book-open"></i><span><strong>README</strong><small>Project overview and setup</small></span></button>
+            <button class="template-option" type="button" data-template="notes"><i data-lucide="notebook-pen"></i><span><strong>Notes</strong><small>Dated notes and action items</small></span></button>
+            <button class="template-option" type="button" data-template="report"><i data-lucide="clipboard-list"></i><span><strong>Report</strong><small>Summary, findings, and recommendations</small></span></button>
+            <button class="template-option" type="button" data-template="diagram"><i data-lucide="workflow"></i><span><strong>Diagram</strong><small>Mermaid flowchart starter</small></span></button>
+        </div>
+        <div class="settings-actions"><button class="secondary" type="button" data-close-dialog>Cancel</button></div>
+    </dialog>
+
     <div class="document-bar">
         <div id="document-tabs" role="tablist" aria-label="Open documents"></div>
         <button id="new-document-btn" title="New document (Ctrl+N)" aria-label="New document">+</button>
+        <div id="layout-switcher" class="layout-switcher" role="group" aria-label="Workspace layout">
+            <button type="button" data-layout="editor" aria-pressed="false">Editor</button>
+            <button type="button" data-layout="split" aria-pressed="true">Split</button>
+            <button type="button" data-layout="preview" aria-pressed="false">Preview</button>
+        </div>
     </div>
 
     <div class="main-content">
@@ -565,9 +802,15 @@
         const missingDependency = [
             ['Markdown parser', globalThis.marked],
             ['HTML sanitizer', globalThis.DOMPurify],
+            ['footnote extension', globalThis.markedFootnote],
+            ['alert extension', globalThis.markedAlert],
+            ['emoji extension', globalThis.markedEmoji],
+            ['KaTeX', globalThis.katex],
+            ['math extension', globalThis.markedKatex],
             ['syntax highlighter', globalThis.hljs],
             ['Mermaid renderer', globalThis.mermaid],
-            ['PlantUML encoder', globalThis.plantumlEncoder]
+            ['PlantUML encoder', globalThis.plantumlEncoder],
+            ['toolbar icons', globalThis.lucide]
         ].find(function(dependency) { return !dependency[1]; });
         if (missingDependency) {
             showStartupError('Unable to start: ' + missingDependency[0] + ' did not load. Reload to try again.');
@@ -580,10 +823,22 @@
         const charCount = document.getElementById('char-count');
         const themeSelect = document.getElementById('theme-select');
         const fontPresetSelect = document.getElementById('font-preset-select');
+        const profileSelect = document.getElementById('profile-select');
         const printBtn = document.getElementById('print-btn');
+        const pdfSettingsDialog = document.getElementById('pdf-settings-dialog');
+        const pdfSettingsForm = document.getElementById('pdf-settings-form');
+        const pdfPaperSize = document.getElementById('pdf-paper-size');
+        const pdfOrientation = document.getElementById('pdf-orientation');
+        const pdfMargin = document.getElementById('pdf-margin');
         const responseTime = document.getElementById('response-time');
         const filenameInput = document.getElementById('filename-input');
         const saveBtn = document.getElementById('save-btn');
+        const workspaceBtn = document.getElementById('workspace-btn');
+        const workspaceDialog = document.getElementById('workspace-dialog');
+        const workspaceError = document.getElementById('workspace-error');
+        const workspaceFileInput = document.getElementById('workspace-file-input');
+        const workspaceImportBtn = document.getElementById('workspace-import-btn');
+        const workspaceExportBtn = document.getElementById('workspace-export-btn');
         const exportHtmlBtn = document.getElementById('export-html-btn');
         const openBtn = document.getElementById('open-btn');
         const openFileInput = document.getElementById('open-file-input');
@@ -592,11 +847,21 @@
         const tocPanel = document.getElementById('toc-panel');
         const tocToggle = document.getElementById('toc-toggle');
         const tocList = document.getElementById('toc-list');
+        const diagnosticsBtn = document.getElementById('diagnostics-btn');
+        const diagnosticsDialog = document.getElementById('diagnostics-dialog');
+        const diagnosticsSummary = document.getElementById('diagnostics-summary');
+        const diagnosticsList = document.getElementById('diagnostics-list');
         const toastContainer = document.getElementById('toast-container');
         const resizer = document.getElementById('resizer');
         const loadingOverlay = document.getElementById('loading-overlay');
         const documentTabs = document.getElementById('document-tabs');
         const newDocumentBtn = document.getElementById('new-document-btn');
+        const templateDialog = document.getElementById('template-dialog');
+        const templateGrid = document.getElementById('template-grid');
+        const layoutSwitcher = document.getElementById('layout-switcher');
+        const toolbarOverflow = document.getElementById('toolbar-overflow');
+        const shortcutsBtn = document.getElementById('shortcuts-btn');
+        const shortcutsDialog = document.getElementById('shortcuts-dialog');
         const plantUmlSettingsBtn = document.getElementById('plantuml-settings-btn');
         const plantUmlSettingsDialog = document.getElementById('plantuml-settings-dialog');
         const plantUmlSettingsForm = document.getElementById('plantuml-settings-form');
@@ -611,8 +876,12 @@
         let persistTimeout;
         let isSwitchingDocument = false;
         let renderGeneration = 0;
+        let diagnostics = [];
+        let scrollSyncSource = null;
         const HIGHLIGHT_CSS_URL = 'https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.11.1/styles/default.min.css';
+        const KATEX_CSS_URL = 'https://cdn.jsdelivr.net/npm/katex@0.16.22/dist/katex.min.css';
         const DEFAULT_PLANTUML_SERVER_URL = 'http://localhost';
+        const EMOJI_DATA_URL = 'https://cdn.jsdelivr.net/npm/emojilib@4.0.2/dist/emoji-en-US.json';
         let plantUmlServerUrl = DEFAULT_PLANTUML_SERVER_URL;
         const FONT_PRESETS = {
             modern: {
@@ -644,6 +913,84 @@
                 codeSize: '13px'
             }
         };
+        const DOCUMENT_TEMPLATES = {
+            blank: { name: 'document.md', content: '' },
+            readme: {
+                name: 'README.md',
+                content: '# Project name\n\nA concise description of the project.\n\n## Features\n\n- Feature one\n- Feature two\n\n## Getting started\n\n```sh\n# Install and run\n```\n\n## Usage\n\nDescribe the primary workflow.\n\n## License\n\nAdd license information.\n'
+            },
+            notes: {
+                name: 'notes.md',
+                content: '# Notes\n\n**Date:** ' + new Date().toISOString().slice(0, 10) + '\n\n## Topics\n\n- Topic\n\n## Decisions\n\n- Decision\n\n## Actions\n\n- [ ] Follow-up task\n'
+            },
+            report: {
+                name: 'report.md',
+                content: '# Report title\n\n## Executive summary\n\nSummarize the outcome.\n\n## Background\n\nProvide context and scope.\n\n## Findings\n\n1. Finding one\n2. Finding two\n\n## Recommendations\n\n- Recommendation\n\n## Appendix\n\nSupporting details.\n'
+            },
+            diagram: {
+                name: 'diagram.md',
+                content: '# System diagram\n\n```mermaid\nflowchart LR\n    Input[Input] --> Process[Process]\n    Process --> Output[Output]\n```\n'
+            }
+        };
+
+        function escapeHtml(value) {
+            return value.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;').replaceAll('"', '&quot;');
+        }
+
+        function preprocessMarkdown(markdownText) {
+            let processed = markdownText;
+            function preserveLineCount(replacement, original) {
+                const missingLines = (original.match(/\n/g) || []).length - (replacement.match(/\n/g) || []).length;
+                return replacement + '\n'.repeat(Math.max(0, missingLines));
+            }
+            const frontMatterMatch = processed.match(/^---\s*\n([\s\S]*?)\n---\s*(?:\n|$)/);
+            if (frontMatterMatch) {
+                const fields = frontMatterMatch[1].split('\n').map(function(line) {
+                    const separator = line.indexOf(':');
+                    if (separator < 1) return '';
+                    return '<dt>' + escapeHtml(line.slice(0, separator).trim()) + '</dt><dd>' + escapeHtml(line.slice(separator + 1).trim()) + '</dd>';
+                }).join('');
+                const frontMatterHtml = '<details class="front-matter"><summary>Front matter</summary><dl>' + fields + '</dl></details>';
+                processed = preserveLineCount(frontMatterHtml, frontMatterMatch[0]) + processed.slice(frontMatterMatch[0].length);
+            }
+            processed = processed.replace(/^:::(note|tip|important|warning|caution)(?:\s+(.+))?\s*\n([\s\S]*?)\n:::\s*$/gim,
+                function(match, type, title, body) {
+                    const quotedBody = body.split('\n').map(function(line) { return '> ' + line; }).join('\n');
+                    const alert = '> [!' + type.toUpperCase() + ']\n' + (title ? '> **' + title + '**\n>\n' : '') + quotedBody + '\n';
+                    return preserveLineCount(alert, match);
+                });
+            processed = processed.replace(/^([^\n]+)\n:\s+(.+)$/gm, function(match, term, definition) {
+                if (/^\s*[-*>#`]/.test(term)) return match;
+                const definitionHtml = '<dl><dt>' + escapeHtml(term.trim()) + '</dt><dd>' + marked.parseInline(definition.trim()) + '</dd></dl>';
+                return preserveLineCount(definitionHtml, match);
+            });
+            return processed;
+        }
+
+        let emojiAliases = { smile: '😄', heart: '❤️', tada: '🎉', warning: '⚠️', rocket: '🚀' };
+        try {
+            const emojiData = await fetch(EMOJI_DATA_URL).then(function(response) {
+                if (!response.ok) throw new Error('Emoji data request failed');
+                return response.json();
+            });
+            emojiAliases = {};
+            Object.entries(emojiData).forEach(function(entry) {
+                entry[1].forEach(function(alias) {
+                    if (/^[a-z0-9_+-]+$/i.test(alias) && !emojiAliases[alias]) emojiAliases[alias] = entry[0];
+                });
+            });
+            Object.entries(emojiData).forEach(function(entry) {
+                const canonicalAlias = entry[1][0];
+                if (/^[a-z0-9_+-]+$/i.test(canonicalAlias)) emojiAliases[canonicalAlias] = entry[0];
+            });
+        } catch (error) {
+            console.warn('Using fallback emoji aliases:', error);
+        }
+
+        marked.use(globalThis.markedFootnote({ refMarkers: true, footnoteDivider: true }));
+        marked.use(globalThis.markedAlert());
+        marked.use(globalThis.markedEmoji.markedEmoji({ emojis: emojiAliases, renderer: function(token) { return token.emoji; } }));
+        marked.use(globalThis.markedKatex({ throwOnError: false, nonStandard: true }));
 
         function setFontPreset(presetName) {
             const preset = FONT_PRESETS[presetName] || FONT_PRESETS.modern;
@@ -787,6 +1134,23 @@
             automaticLayout: true,
             wordWrap: 'on'
         });
+
+        function setLayout(layout) {
+            const nextLayout = ['editor', 'split', 'preview'].includes(layout) ? layout : 'split';
+            document.body.classList.remove('layout-editor', 'layout-split', 'layout-preview');
+            document.body.classList.add('layout-' + nextLayout);
+            layoutSwitcher.querySelectorAll('[data-layout]').forEach(function(button) {
+                button.setAttribute('aria-pressed', String(button.dataset.layout === nextLayout));
+            });
+            localStorage.setItem('workspaceLayout', nextLayout);
+            requestAnimationFrame(function() { editor.layout(); });
+        }
+
+        layoutSwitcher.addEventListener('click', function(event) {
+            const button = event.target.closest('[data-layout]');
+            if (button) setLayout(button.dataset.layout);
+        });
+        setLayout(localStorage.getItem('workspaceLayout') || (matchMedia('(max-width: 900px)').matches ? 'preview' : 'split'));
 
         function insertTextAtCursor(text) {
             const position = editor.getPosition();
@@ -988,8 +1352,13 @@
             updateFilenameFromTitle(markdownText);
             renderDocumentTabs();
             scheduleWorkspacePersistence();
-            const htmlContent = marked.parse(markdownText);
+            const profileOptions = profileSelect.value === 'commonmark'
+                ? { gfm: false, breaks: false, pedantic: false }
+                : { gfm: true, breaks: false, pedantic: false };
+            const processedMarkdown = preprocessMarkdown(markdownText);
+            const htmlContent = marked.parse(processedMarkdown, profileOptions);
             preview.innerHTML = DOMPurify.sanitize(htmlContent);
+            annotatePreviewSourceLines(markdownText);
             renderPlantUML();
 
             // Syntax highlight
@@ -1006,10 +1375,87 @@
             if (generation !== renderGeneration) return;
 
             updateCounts(markdownText);
+            updateDiagnostics(markdownText);
             buildTOC();
             const end = performance.now();
             responseTime.textContent = '\u26A1 ' + (end - start).toFixed(2) + 'ms';
         }
+
+        function annotatePreviewSourceLines(markdownText) {
+            const blocks = Array.from(preview.children);
+            const lines = markdownText.split('\n');
+            const sourceLines = [];
+            let index = 0;
+            while (index < lines.length) {
+                const line = lines[index];
+                if (!line.trim()) { index++; continue; }
+                const lineNumber = index + 1;
+                if (index === 0 && /^---\s*$/.test(line)) {
+                    sourceLines.push(lineNumber);
+                    index++;
+                    while (index < lines.length && !/^---\s*$/.test(lines[index])) index++;
+                    index++;
+                    continue;
+                }
+                const fence = line.match(/^\s{0,3}(`{3,}|~{3,})/);
+                if (fence) {
+                    sourceLines.push(lineNumber);
+                    const marker = fence[1][0];
+                    index++;
+                    while (index < lines.length && !new RegExp('^\\s{0,3}' + marker + '{3,}').test(lines[index])) index++;
+                    index++;
+                    continue;
+                }
+                if (/^\$\$\s*$/.test(line)) {
+                    sourceLines.push(lineNumber);
+                    index++;
+                    while (index < lines.length && !/^\$\$\s*$/.test(lines[index])) index++;
+                    index++;
+                    continue;
+                }
+                if (/^:::(note|tip|important|warning|caution)\b/i.test(line)) {
+                    sourceLines.push(lineNumber);
+                    index++;
+                    while (index < lines.length && !/^:::\s*$/.test(lines[index])) index++;
+                    index++;
+                    continue;
+                }
+                if (/^>\s*\[!(note|tip|important|warning|caution)\]/i.test(line)) {
+                    sourceLines.push(lineNumber);
+                    index++;
+                    while (index < lines.length && /^>/.test(lines[index])) index++;
+                    continue;
+                }
+                if (/^\[\^[^\]]+\]:/.test(line)) {
+                    sourceLines.push(lineNumber, lineNumber);
+                    index++;
+                    while (index < lines.length && (/^\s{2,}\S/.test(lines[index]) || !lines[index].trim())) index++;
+                    continue;
+                }
+                sourceLines.push(lineNumber);
+                if (index + 1 < lines.length && /^:\s+/.test(lines[index + 1])) { index += 2; continue; }
+                index++;
+                while (index < lines.length && lines[index].trim() &&
+                    !/^(#{1,6}\s|>|[-*+]\s|\d+[.)]\s|```|~~~|:::|\$\$|\[\^)/.test(lines[index])) index++;
+            }
+            blocks.forEach(function(block, blockIndex) {
+                const line = sourceLines[blockIndex];
+                if (!line) return;
+                block.dataset.sourceLine = String(line);
+                block.title = 'Go to source line ' + line;
+            });
+        }
+
+        preview.addEventListener('click', function(event) {
+            if (event.target.closest('a, button, input')) return;
+            const block = event.target.closest('[data-source-line]');
+            if (!block) return;
+            const line = Number(block.dataset.sourceLine);
+            setLayout('editor');
+            editor.revealLineInCenter(line);
+            editor.setPosition({ lineNumber: line, column: 1 });
+            editor.focus();
+        });
 
         // Event delegation for code block copy buttons
         preview.addEventListener('click', function(e) {
@@ -1032,6 +1478,72 @@
             wordCount.textContent = '\u270E ' + words.length;
             charCount.textContent = 'Aa ' + text.length;
         }
+
+        function updateDiagnostics(text) {
+            diagnostics = [];
+            let previousHeadingLevel = 0;
+            let openFence = null;
+            text.split('\n').forEach(function(line, index) {
+                const lineNumber = index + 1;
+                const fenceMatch = line.match(/^\s{0,3}(`{3,}|~{3,})/);
+                if (fenceMatch) {
+                    const marker = fenceMatch[1][0];
+                    if (!openFence) openFence = { marker: marker, line: lineNumber };
+                    else if (openFence.marker === marker) openFence = null;
+                    return;
+                }
+                if (openFence) return;
+
+                const headingMatch = line.match(/^\s{0,3}(#{1,6})\s+/);
+                if (headingMatch) {
+                    const level = headingMatch[1].length;
+                    if (previousHeadingLevel && level > previousHeadingLevel + 1) {
+                        diagnostics.push({ line: lineNumber, message: 'Heading level jumps from H' + previousHeadingLevel + ' to H' + level + '.' });
+                    }
+                    previousHeadingLevel = level;
+                }
+                const imagePattern = /!\[([^\]]*)\]\(([^)]*)\)/g;
+                let imageMatch;
+                while ((imageMatch = imagePattern.exec(line))) {
+                    if (!imageMatch[1].trim()) diagnostics.push({ line: lineNumber, message: 'Image is missing alternative text.' });
+                    if (!imageMatch[2].trim()) diagnostics.push({ line: lineNumber, message: 'Image has an empty source.' });
+                }
+                if (/(^|[^!])\[[^\]]+\]\(\s*\)/.test(line)) {
+                    diagnostics.push({ line: lineNumber, message: 'Link has an empty destination.' });
+                }
+            });
+            if (openFence) diagnostics.push({ line: openFence.line, message: 'Code fence is not closed.' });
+            diagnosticsBtn.querySelector('#diagnostics-count').textContent = diagnostics.length;
+            diagnosticsBtn.setAttribute('aria-label', 'Review Markdown diagnostics, ' + diagnostics.length + ' issues');
+        }
+
+        function showDiagnostics() {
+            diagnosticsList.replaceChildren();
+            diagnosticsSummary.textContent = diagnostics.length
+                ? diagnostics.length + (diagnostics.length === 1 ? ' issue found.' : ' issues found.')
+                : 'No issues found.';
+            diagnostics.forEach(function(diagnostic) {
+                const item = document.createElement('li');
+                const button = document.createElement('button');
+                const lineLabel = document.createElement('span');
+                lineLabel.className = 'diagnostic-line';
+                lineLabel.textContent = 'Line ' + diagnostic.line;
+                button.type = 'button';
+                button.append(lineLabel, document.createElement('br'), document.createTextNode(diagnostic.message));
+                button.addEventListener('click', function() {
+                    diagnosticsDialog.close();
+                    setLayout('editor');
+                    editor.revealLineInCenter(diagnostic.line);
+                    editor.setPosition({ lineNumber: diagnostic.line, column: 1 });
+                    editor.focus();
+                });
+                item.appendChild(button);
+                diagnosticsList.appendChild(item);
+            });
+            diagnosticsDialog.showModal();
+        }
+        diagnosticsBtn.addEventListener('click', showDiagnostics);
+        diagnosticsDialog.querySelector('[data-close-dialog]').addEventListener('click', function() { diagnosticsDialog.close(); });
 
         // --- Build Table of Contents ---
         function buildTOC() {
@@ -1111,6 +1623,13 @@
         });
         setFontPreset(localStorage.getItem('previewFontPreset') || 'modern');
 
+        profileSelect.value = localStorage.getItem('markdownProfile') || 'gfm';
+        profileSelect.addEventListener('change', function() {
+            localStorage.setItem('markdownProfile', profileSelect.value);
+            renderMarkdown();
+            showToast(profileSelect.value === 'gfm' ? 'GitHub Markdown profile' : 'CommonMark profile');
+        });
+
         plantUmlSettingsBtn.addEventListener('click', function() {
             plantUmlServerInput.value = plantUmlServerUrl;
             plantUmlServerError.hidden = true;
@@ -1148,16 +1667,43 @@
         // Initial render
         renderMarkdown();
 
-        // Print button (fix: use afterprint event to remove class reliably)
-        printBtn.addEventListener('click', function() {
+        function printPreview() {
             const themeClass = Array.from(document.body.classList).find(function(c) { return c.startsWith('theme-'); });
             document.documentElement.classList.add(themeClass);
+            let printPageStyle = document.getElementById('print-page-style');
+            if (!printPageStyle) {
+                printPageStyle = document.createElement('style');
+                printPageStyle.id = 'print-page-style';
+                document.head.appendChild(printPageStyle);
+            }
+            printPageStyle.textContent = '@page { size: ' + pdfPaperSize.value + ' ' + pdfOrientation.value + '; margin: ' + pdfMargin.value + 'mm; }';
             function cleanup() {
                 document.documentElement.classList.remove(themeClass);
                 globalThis.removeEventListener('afterprint', cleanup);
             }
             globalThis.addEventListener('afterprint', cleanup);
             globalThis.print();
+        }
+
+        printBtn.addEventListener('click', function() {
+            const settings = JSON.parse(localStorage.getItem('pdfSettings') || '{}');
+            pdfPaperSize.value = settings.paperSize || 'A4';
+            pdfOrientation.value = settings.orientation || 'portrait';
+            pdfMargin.value = settings.margin ?? 10;
+            pdfSettingsDialog.showModal();
+        });
+        pdfSettingsDialog.querySelector('[data-close-dialog]').addEventListener('click', function() {
+            pdfSettingsDialog.close();
+        });
+        pdfSettingsForm.addEventListener('submit', function(event) {
+            event.preventDefault();
+            localStorage.setItem('pdfSettings', JSON.stringify({
+                paperSize: pdfPaperSize.value,
+                orientation: pdfOrientation.value,
+                margin: Number(pdfMargin.value)
+            }));
+            pdfSettingsDialog.close();
+            printPreview();
         });
 
         function beginFilenameEdit() {
@@ -1210,6 +1756,76 @@
             showToast('File saved: ' + filename);
         });
 
+        workspaceBtn.addEventListener('click', function() {
+            workspaceError.hidden = true;
+            workspaceDialog.showModal();
+        });
+        workspaceDialog.querySelector('[data-close-dialog]').addEventListener('click', function() {
+            workspaceDialog.close();
+        });
+        workspaceExportBtn.addEventListener('click', function() {
+            getActiveDocument().content = editor.getValue();
+            const backup = {
+                format: 'markdown-previewer-workspace',
+                version: 1,
+                exportedAt: new Date().toISOString(),
+                activeDocumentId: activeDocumentId,
+                documents: documents
+            };
+            const blob = new Blob([JSON.stringify(backup, null, 2)], { type: 'application/json' });
+            const anchor = document.createElement('a');
+            anchor.href = URL.createObjectURL(blob);
+            anchor.download = 'markdown-workspace-' + new Date().toISOString().slice(0, 10) + '.json';
+            document.body.appendChild(anchor);
+            anchor.click();
+            setTimeout(function() {
+                anchor.remove();
+                URL.revokeObjectURL(anchor.href);
+            }, 100);
+            workspaceDialog.close();
+            showToast('Workspace backup exported');
+        });
+        workspaceImportBtn.addEventListener('click', function() { workspaceFileInput.click(); });
+        workspaceFileInput.addEventListener('change', async function() {
+            const file = workspaceFileInput.files && workspaceFileInput.files[0];
+            if (!file) return;
+            try {
+                const backup = JSON.parse(await file.text());
+                if (backup.format !== 'markdown-previewer-workspace' || backup.version !== 1 ||
+                    !Array.isArray(backup.documents) || !backup.documents.length ||
+                    backup.documents.some(function(document) {
+                        return !document || typeof document.name !== 'string' || typeof document.content !== 'string';
+                    })) {
+                    throw new Error('This is not a valid workspace backup.');
+                }
+                documents = backup.documents.map(function(document) {
+                    return {
+                        id: typeof document.id === 'string' ? document.id : newDocument().id,
+                        name: document.name || 'document.md',
+                        content: document.content,
+                        filenameCustom: Boolean(document.filenameCustom)
+                    };
+                });
+                activeDocumentId = documents.some(function(document) { return document.id === backup.activeDocumentId; })
+                    ? backup.activeDocumentId : documents[0].id;
+                const activeDocument = getActiveDocument();
+                isSwitchingDocument = true;
+                editor.setValue(activeDocument.content);
+                isSwitchingDocument = false;
+                filenameInput.value = activeDocument.name;
+                renderDocumentTabs();
+                renderMarkdown();
+                await persistWorkspace();
+                workspaceDialog.close();
+                showToast('Workspace restored');
+            } catch (error) {
+                workspaceError.textContent = error.message || 'Unable to restore this backup.';
+                workspaceError.hidden = false;
+            } finally {
+                workspaceFileInput.value = '';
+            }
+        });
+
         // Export clean rendered HTML with the active theme and syntax colors
         exportHtmlBtn.addEventListener('click', async function() {
             const previewStyle = getComputedStyle(preview);
@@ -1218,12 +1834,16 @@
             const codeStyle = getComputedStyle(preview.querySelector('code') || preview);
             const tableHeadingStyle = getComputedStyle(preview.querySelector('th') || preview);
             const blockquoteStyle = getComputedStyle(preview.querySelector('blockquote') || preview);
-            let highlightCss = '';
+            let dependencyCss = '';
             try {
-                const response = await fetch(HIGHLIGHT_CSS_URL);
-                if (response.ok) highlightCss = await response.text();
+                const responses = await Promise.all([fetch(HIGHLIGHT_CSS_URL), fetch(KATEX_CSS_URL)]);
+                const styles = await Promise.all(responses.map(function(response) {
+                    return response.ok ? response.text() : '';
+                }));
+                styles[1] = styles[1].replaceAll('url(fonts/', 'url(https://cdn.jsdelivr.net/npm/katex@0.16.22/dist/fonts/');
+                dependencyCss = styles.join('\n');
             } catch (error) {
-                console.warn('Unable to include syntax highlight styles in export:', error);
+                console.warn('Unable to include dependency styles in export:', error);
             }
             const title = getActiveDocument().name.replace(/\.md$/i, '');
             const escapedTitle = title.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;');
@@ -1238,10 +1858,17 @@
                 'blockquote{border-left:5px solid ' + blockquoteStyle.borderLeftColor + ';margin:5px 0;padding:3px 12px;' +
                 'background:' + blockquoteStyle.backgroundColor + ';color:' + blockquoteStyle.color + '}' +
                 'img,svg{max-width:100%;height:auto}.mermaid,.plantuml{text-align:center;overflow-x:auto}' +
-                'input[type="checkbox"]{width:16px;height:16px;vertical-align:middle}';
+                'input[type="checkbox"]{width:16px;height:16px;vertical-align:middle}' +
+                'dl{margin:16px 0}dt{font-weight:bold}dd{margin:4px 0 12px 24px}' +
+                '.front-matter{margin:12px 0;padding:10px 12px;border:1px solid #ccc;border-radius:4px}.front-matter summary{font-weight:bold;cursor:pointer}' +
+                '.front-matter dl{display:grid;grid-template-columns:max-content 1fr;gap:4px 14px}.front-matter dd{margin:0}' +
+                '.markdown-alert{margin:16px 0;padding:10px 14px;border-left:4px solid #0969da;background:rgba(9,105,218,.08)}' +
+                '.markdown-alert-title{font-weight:bold;margin:0 0 6px}.markdown-alert-tip{border-color:#1a7f37}.markdown-alert-important{border-color:#8250df}' +
+                '.markdown-alert-warning{border-color:#9a6700}.markdown-alert-caution{border-color:#cf222e}' +
+                '.footnotes{margin-top:32px;border-top:1px solid #ccc;font-size:.92em}.katex-display{overflow-x:auto;overflow-y:hidden}';
             const html = '<!DOCTYPE html>\n<html lang="en"><head><meta charset="UTF-8">' +
                 '<meta name="viewport" content="width=device-width,initial-scale=1"><title>' + escapedTitle + '</title>\n' +
-                '<style>' + highlightCss + exportCss + '</style>\n</head><body>' + getCleanPreviewClone().innerHTML + '</body></html>';
+                '<style>' + dependencyCss + exportCss + '</style>\n</head><body>' + getCleanPreviewClone().innerHTML + '</body></html>';
             const blob = new Blob([html], { type: 'text/html' });
             const a = document.createElement('a');
             a.href = URL.createObjectURL(blob);
@@ -1255,7 +1882,15 @@
             showToast('HTML exported');
         });
 
-        newDocumentBtn.addEventListener('click', function() { addDocument(newDocument()); });
+        newDocumentBtn.addEventListener('click', function() { templateDialog.showModal(); });
+        templateDialog.querySelector('[data-close-dialog]').addEventListener('click', function() { templateDialog.close(); });
+        templateGrid.addEventListener('click', function(event) {
+            const button = event.target.closest('[data-template]');
+            if (!button) return;
+            const template = DOCUMENT_TEMPLATES[button.dataset.template];
+            addDocument(newDocument(template.name, template.content, true));
+            templateDialog.close();
+        });
         documentTabs.addEventListener('keydown', function(event) {
             if (!event.target.classList.contains('document-tab-select')) return;
             const tabs = Array.from(documentTabs.querySelectorAll('.document-tab-select'));
@@ -1354,9 +1989,20 @@
 
         // --- Scroll sync ---
         editor.onDidScrollChange(function(e) {
+            if (scrollSyncSource === 'preview') return;
             const scrollableHeight = editor.getScrollHeight() - editor.getLayoutInfo().height;
             const ratio = scrollableHeight > 0 ? e.scrollTop / scrollableHeight : 0;
+            scrollSyncSource = 'editor';
             preview.scrollTop = ratio * (preview.scrollHeight - preview.clientHeight);
+            requestAnimationFrame(function() { if (scrollSyncSource === 'editor') scrollSyncSource = null; });
+        });
+        preview.addEventListener('scroll', function() {
+            if (scrollSyncSource === 'editor') return;
+            const scrollableHeight = preview.scrollHeight - preview.clientHeight;
+            const ratio = scrollableHeight > 0 ? preview.scrollTop / scrollableHeight : 0;
+            scrollSyncSource = 'preview';
+            editor.setScrollTop(ratio * (editor.getScrollHeight() - editor.getLayoutInfo().height));
+            requestAnimationFrame(function() { if (scrollSyncSource === 'preview') scrollSyncSource = null; });
         });
 
         // --- Drag and drop images (Monaco handles everything else natively) ---
@@ -1410,13 +2056,41 @@
             's': function() { saveBtn.click(); },
             'p': function() { printBtn.click(); }
         };
+        let shortcutHelpReturnFocus;
+        function showShortcutHelp() {
+            shortcutHelpReturnFocus = document.activeElement === shortcutsBtn
+                ? toolbarOverflow.querySelector('summary') : document.activeElement;
+            toolbarOverflow.open = false;
+            shortcutsDialog.showModal();
+            shortcutsDialog.querySelector('[data-close-dialog]').focus();
+        }
+        shortcutsBtn.addEventListener('click', showShortcutHelp);
+        shortcutsDialog.querySelector('[data-close-dialog]').addEventListener('click', function() {
+            shortcutsDialog.close();
+        });
+        shortcutsDialog.addEventListener('close', function() {
+            if (shortcutHelpReturnFocus && shortcutHelpReturnFocus.isConnected) shortcutHelpReturnFocus.focus();
+        });
+        document.addEventListener('click', function(event) {
+            if (toolbarOverflow.open && !toolbarOverflow.contains(event.target)) toolbarOverflow.open = false;
+        });
         document.addEventListener('keydown', function(e) {
+            if (e.key === 'Escape' && toolbarOverflow.open) {
+                toolbarOverflow.open = false;
+                toolbarOverflow.querySelector('summary').focus();
+                return;
+            }
             if (e.key === 'Escape' && document.body.classList.contains('zen-mode')) {
                 e.preventDefault();
                 setZenMode(false);
                 return;
             }
             if (!e.ctrlKey) return;
+            if (e.shiftKey && e.code === 'Slash') {
+                e.preventDefault();
+                showShortcutHelp();
+                return;
+            }
             if (e.shiftKey && e.key === 'C') {
                 e.preventDefault();
                 copyBtn.click();
@@ -1432,6 +2106,7 @@
         // --- Hide loading overlay once ready ---
         filenameInput.value = getActiveDocument().name;
         renderDocumentTabs();
+        globalThis.lucide.createIcons();
         loadingOverlay.style.display = 'none';
     }, function(error) {
         console.error('Unable to load Monaco editor:', error);
