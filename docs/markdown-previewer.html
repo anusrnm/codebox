@@ -83,6 +83,11 @@
             --para-fg: inherit;
             --li-fg: inherit;
             --focus-ring: 2px solid #4CAF50;
+            --preview-body-font: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            --preview-heading-font: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            --preview-code-font: 'Fira Mono', Consolas, Menlo, Monaco, monospace;
+            --preview-body-font-size: 16px;
+            --preview-code-font-size: 15px;
         }
 
         .theme-dark {
@@ -189,13 +194,14 @@
 
         #preview {
             border: 1px solid var(--preview-border);
-            padding: 20px;
+            padding: 8px 20px 20px;
             background-color: var(--preview-bg);
             color: var(--preview-fg);
             min-height: 0;
             overflow-y: auto; overflow-x: auto;
             flex: 1 1 50%; box-sizing: border-box;
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            font-family: var(--preview-body-font);
+            font-size: var(--preview-body-font-size);
         }
         #preview table { width: 100%; border-collapse: collapse; margin-top: 20px; background: inherit; }
         #preview th, #preview td { padding: 10px; text-align: left; border: none; }
@@ -204,10 +210,11 @@
         #preview pre {
             background: var(--pre-bg); color: var(--pre-fg);
             border-radius: 6px; padding: 12px 48px 12px 12px; margin: 10px 0;
-            font-size: 15px; font-family: 'Fira Mono','Consolas','Menlo','Monaco',monospace;
+            font-size: var(--preview-code-font-size); font-family: var(--preview-code-font);
             overflow-x: auto; box-shadow: 0 2px 8px var(--pre-shadow); position: relative;
         }
-        #preview code { padding: 2px 4px; border-radius: 4px; background-color: var(--code-bg); color: var(--code-fg); }
+        #preview code { padding: 2px 4px; border-radius: 4px; background-color: var(--code-bg); color: var(--code-fg); font-family: var(--preview-code-font); font-size: var(--preview-code-font-size); }
+        #preview h1, #preview h2, #preview h3, #preview h4, #preview h5, #preview h6 { font-family: var(--preview-heading-font); }
         #preview h1 { color: var(--heading-h1); }
         #preview h2 { color: var(--heading-h2); }
         #preview p { color: var(--para-fg); }
@@ -297,7 +304,7 @@
             font-family: 'Segoe UI', Arial, sans-serif;
             letter-spacing: 0.2px;
         }
-        select#theme-select {
+        select#theme-select, select#font-preset-select {
             padding: 8px 12px; border-radius: 4px;
             border: 1px solid var(--select-border);
             background: var(--select-bg); color: var(--select-fg);
@@ -494,6 +501,13 @@
             <button id="toc-toggle" title="Toggle Table of Contents" aria-label="Toggle Table of Contents"
                 aria-controls="toc-panel" aria-expanded="false">TOC</button>
             <button id="plantuml-settings-btn" title="Choose PlantUML server" aria-label="Choose PlantUML server">PlantUML</button>
+            <label for="font-preset-select" id="font-preset-label">Fonts:</label>
+            <select id="font-preset-select" title="Choose preview font combination" aria-labelledby="font-preset-label">
+                <option value="modern">Modern</option>
+                <option value="editorial">Editorial</option>
+                <option value="classic">Classic</option>
+                <option value="technical">Technical</option>
+            </select>
             <label for="theme-select" id="theme-label">Theme:</label>
             <select id="theme-select" title="Choose preview theme" aria-labelledby="theme-label">
                 <option value="light">Light</option>
@@ -565,6 +579,7 @@
         const wordCount = document.getElementById('word-count');
         const charCount = document.getElementById('char-count');
         const themeSelect = document.getElementById('theme-select');
+        const fontPresetSelect = document.getElementById('font-preset-select');
         const printBtn = document.getElementById('print-btn');
         const responseTime = document.getElementById('response-time');
         const filenameInput = document.getElementById('filename-input');
@@ -599,6 +614,47 @@
         const HIGHLIGHT_CSS_URL = 'https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.11.1/styles/default.min.css';
         const DEFAULT_PLANTUML_SERVER_URL = 'http://localhost';
         let plantUmlServerUrl = DEFAULT_PLANTUML_SERVER_URL;
+        const FONT_PRESETS = {
+            modern: {
+                body: "'Segoe UI', Tahoma, Geneva, Verdana, sans-serif",
+                heading: "'Segoe UI', Tahoma, Geneva, Verdana, sans-serif",
+                code: "'Fira Mono', Consolas, Menlo, Monaco, monospace",
+                bodySize: '16px',
+                codeSize: '14px'
+            },
+            editorial: {
+                body: "Georgia, 'Times New Roman', serif",
+                heading: "'Trebuchet MS', 'Segoe UI', sans-serif",
+                code: "Consolas, Menlo, Monaco, monospace",
+                bodySize: '17px',
+                codeSize: '14px'
+            },
+            classic: {
+                body: "Georgia, 'Times New Roman', serif",
+                heading: "Georgia, 'Times New Roman', serif",
+                code: "'Courier New', Courier, monospace",
+                bodySize: '16px',
+                codeSize: '15px'
+            },
+            technical: {
+                body: "Verdana, Geneva, sans-serif",
+                heading: "'Arial Narrow', Arial, sans-serif",
+                code: "Consolas, 'Liberation Mono', monospace",
+                bodySize: '14px',
+                codeSize: '13px'
+            }
+        };
+
+        function setFontPreset(presetName) {
+            const preset = FONT_PRESETS[presetName] || FONT_PRESETS.modern;
+            document.documentElement.style.setProperty('--preview-body-font', preset.body);
+            document.documentElement.style.setProperty('--preview-heading-font', preset.heading);
+            document.documentElement.style.setProperty('--preview-code-font', preset.code);
+            document.documentElement.style.setProperty('--preview-body-font-size', preset.bodySize);
+            document.documentElement.style.setProperty('--preview-code-font-size', preset.codeSize);
+            fontPresetSelect.value = FONT_PRESETS[presetName] ? presetName : 'modern';
+            localStorage.setItem('previewFontPreset', fontPresetSelect.value);
+        }
 
         function normalizePlantUmlServerUrl(value) {
             const url = new URL(value.trim());
@@ -1049,6 +1105,12 @@
         themeSelect.value = savedTheme;
         setTheme(savedTheme);
 
+        fontPresetSelect.addEventListener('change', function() {
+            setFontPreset(fontPresetSelect.value);
+            showToast('Preview fonts updated');
+        });
+        setFontPreset(localStorage.getItem('previewFontPreset') || 'modern');
+
         plantUmlSettingsBtn.addEventListener('click', function() {
             plantUmlServerInput.value = plantUmlServerUrl;
             plantUmlServerError.hidden = true;
@@ -1152,6 +1214,8 @@
         exportHtmlBtn.addEventListener('click', async function() {
             const previewStyle = getComputedStyle(preview);
             const preStyle = getComputedStyle(preview.querySelector('pre') || preview);
+            const headingStyle = getComputedStyle(preview.querySelector('h1, h2, h3, h4, h5, h6') || preview);
+            const codeStyle = getComputedStyle(preview.querySelector('code') || preview);
             const tableHeadingStyle = getComputedStyle(preview.querySelector('th') || preview);
             const blockquoteStyle = getComputedStyle(preview.querySelector('blockquote') || preview);
             let highlightCss = '';
@@ -1164,10 +1228,11 @@
             const title = getActiveDocument().name.replace(/\.md$/i, '');
             const escapedTitle = title.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;');
             const exportCss =
-                'body{font-family:"Segoe UI",Tahoma,sans-serif;max-width:900px;margin:40px auto;padding:20px;line-height:1.6;' +
+                'body{font-family:' + previewStyle.fontFamily + ';font-size:' + previewStyle.fontSize + ';max-width:900px;margin:40px auto;padding:20px;line-height:1.6;' +
                 'background:' + previewStyle.backgroundColor + ';color:' + previewStyle.color + '}' +
-                'pre{background:' + preStyle.backgroundColor + ';color:' + preStyle.color + ';padding:16px;border-radius:6px;overflow-x:auto}' +
-                'code{font-family:Consolas,Menlo,monospace}table{border-collapse:collapse;width:100%;margin-top:20px}' +
+                'h1,h2,h3,h4,h5,h6{font-family:' + headingStyle.fontFamily + '}' +
+                'pre{font-family:' + codeStyle.fontFamily + ';font-size:' + codeStyle.fontSize + ';background:' + preStyle.backgroundColor + ';color:' + preStyle.color + ';padding:16px;border-radius:6px;overflow-x:auto}' +
+                'code{font-family:' + codeStyle.fontFamily + ';font-size:' + codeStyle.fontSize + '}table{border-collapse:collapse;width:100%;margin-top:20px}' +
                 'th,td{padding:10px;text-align:left;border-bottom:1px solid ' + previewStyle.borderColor + '}' +
                 'th{background:' + tableHeadingStyle.backgroundColor + ';color:' + tableHeadingStyle.color + '}' +
                 'blockquote{border-left:5px solid ' + blockquoteStyle.borderLeftColor + ';margin:5px 0;padding:3px 12px;' +
