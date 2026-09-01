@@ -105,6 +105,10 @@
             --preview-code-font: 'Fira Mono', Consolas, Menlo, Monaco, monospace;
             --preview-body-font-size: 16px;
             --preview-code-font-size: 15px;
+            --preview-line-height: 1.6;
+            --preview-content-width: 900px;
+            --preview-paragraph-spacing: 16px;
+            --preview-table-cell-padding: 10px;
         }
 
         .theme-dark {
@@ -219,9 +223,11 @@
             flex: 1 1 50%; box-sizing: border-box;
             font-family: var(--preview-body-font);
             font-size: var(--preview-body-font-size);
+            line-height: var(--preview-line-height);
         }
+        #preview > * { max-width: var(--preview-content-width); margin-left: auto; margin-right: auto; }
         #preview table { width: 100%; border-collapse: collapse; margin-top: 20px; background: inherit; }
-        #preview th, #preview td { padding: 10px; text-align: left; border: none; }
+        #preview th, #preview td { padding: var(--preview-table-cell-padding); text-align: left; border: none; }
         #preview th { background-color: var(--th-bg); color: var(--th-fg); font-weight: bold; }
         #preview tr { border-bottom: 1px solid var(--row-border); }
         #preview pre {
@@ -234,7 +240,7 @@
         #preview h1, #preview h2, #preview h3, #preview h4, #preview h5, #preview h6 { font-family: var(--preview-heading-font); }
         #preview h1 { color: var(--heading-h1); }
         #preview h2 { color: var(--heading-h2); }
-        #preview p { color: var(--para-fg); }
+        #preview p { color: var(--para-fg); margin-top: var(--preview-paragraph-spacing); margin-bottom: var(--preview-paragraph-spacing); }
         #preview li { color: var(--li-fg); }
         #preview blockquote {
             background-color: var(--blockquote-bg); border-left: 5px solid var(--blockquote-border);
@@ -274,6 +280,8 @@
         #preview .markdown-alert-caution .markdown-alert-title { color: #cf222e; }
         #preview .footnotes { margin-top: 32px; border-top: 1px solid var(--row-border); font-size: 0.92em; }
         #preview .katex-display { overflow-x: auto; overflow-y: hidden; padding: 4px 0; }
+        #preview.appearance-code-wrap pre, #preview.appearance-code-wrap pre code { white-space: pre-wrap; word-break: break-word; }
+        #preview.appearance-compact-tables { --preview-table-cell-padding: 5px 8px; }
 
         /* --- Settings dialog --- */
         .settings-dialog {
@@ -325,6 +333,14 @@
         .template-option svg { flex: 0 0 auto; width: 20px; height: 20px; }
         .template-option strong, .template-option small { display: block; }
         .template-option small { margin-top: 4px; color: var(--blockquote-fg); }
+        .appearance-dialog { width: min(620px, calc(100vw - 32px)); max-height: calc(100vh - 32px); overflow-y: auto; }
+        .appearance-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px 16px; }
+        .appearance-field label { display: flex; justify-content: space-between; gap: 8px; }
+        .appearance-field output { color: var(--blockquote-fg); font-weight: normal; }
+        .appearance-field-wide { grid-column: 1 / -1; }
+        .appearance-toggles { display: flex; flex-wrap: wrap; gap: 16px; margin-top: 16px; }
+        .appearance-toggles label { display: inline-flex; align-items: center; gap: 7px; margin: 0; font-weight: normal; }
+        .appearance-toggles input { width: auto; }
 
         /* --- Toolbar --- */
         .toolbar {
@@ -366,18 +382,29 @@
         .toolbar-overflow > summary::-webkit-details-marker { display: none; }
         .overflow-menu {
             position: absolute; top: calc(100% + 6px); right: 0; z-index: 210;
-            width: 240px; padding: 8px; box-sizing: border-box;
+            width: 252px; padding: 8px; box-sizing: border-box;
             border: 1px solid var(--preview-border); border-radius: 5px;
             background: var(--preview-bg); color: var(--preview-fg);
             box-shadow: 0 8px 24px rgba(0,0,0,0.18);
         }
         .overflow-menu button {
-            display: flex; align-items: center; gap: 9px; width: 100%;
-            padding: 8px; background: transparent; color: var(--fg); text-align: left;
+            display: flex; align-items: center; gap: 9px; width: 100%; min-height: 34px;
+            padding: 8px; background: transparent; color: var(--fg); text-align: left; border-radius: 3px;
         }
         .overflow-menu button:hover { background: var(--th-bg); }
-        .overflow-field { display: grid; grid-template-columns: 60px 1fr; gap: 8px; align-items: center; margin-top: 8px; }
-        .overflow-field label { font-size: 13px; }
+        .overflow-menu button svg { flex: 0 0 18px; }
+        .overflow-settings {
+            display: grid; gap: 8px; margin-top: 8px; padding-top: 9px;
+            border-top: 1px solid var(--row-border);
+        }
+        .overflow-field { display: grid; grid-template-columns: 64px minmax(0, 1fr); gap: 8px; align-items: center; }
+        .overflow-field label { color: var(--blockquote-fg); font-size: 12px; font-weight: 600; }
+        .overflow-field select {
+            width: 100%; min-width: 0; height: 34px; padding: 7px 8px; border-radius: 4px;
+            border: 1px solid var(--preview-border); background: var(--select-bg); color: var(--select-fg);
+            font-size: 14px; transition: background 0.2s, color 0.2s;
+        }
+        .overflow-field select:focus { border-color: var(--select-border); }
         .document-bar {
             display: flex; align-items: center; gap: 6px; min-height: 38px;
             margin-bottom: 8px; border-bottom: 1px solid var(--preview-border);
@@ -401,7 +428,11 @@
             padding: 8px; border-radius: 0 4px 0 0; background: var(--th-bg);
             color: var(--fg); font-size: 16px; line-height: 1;
         }
-        #new-document-btn { flex: 0 0 auto; padding: 6px 10px; font-size: 18px; line-height: 1; }
+        #new-document-btn {
+            flex: 0 0 30px; display: inline-flex; align-items: center; justify-content: center;
+            width: 30px; height: 30px; padding: 0;
+        }
+        #new-document-btn svg { width: 18px; height: 18px; }
         .layout-switcher {
             display: inline-flex; margin-left: auto; padding: 2px;
             border: 1px solid var(--preview-border); border-radius: 4px;
@@ -432,12 +463,6 @@
             font-family: 'Segoe UI', Arial, sans-serif;
             letter-spacing: 0.2px;
         }
-        select#theme-select, select#font-preset-select {
-            min-width: 0; padding: 7px 8px; border-radius: 4px;
-            border: 1px solid var(--select-border);
-            background: var(--select-bg); color: var(--select-fg);
-            font-size: 14px; transition: background 0.2s, color 0.2s;
-        }
         #filename-input {
             border: none; background: transparent; color: var(--filename-fg);
             width: clamp(110px, 20vw, 240px); font-size: 14px; padding: 8px 10px;
@@ -460,7 +485,7 @@
         }
         #toc-panel.collapsed { transform: translateX(100%); }
         #toc-toggle {
-            padding: 6px 12px; font-size: 13px;
+            padding: 0;
         }
         #toc-list { list-style: none; padding: 0; margin-top: 8px; }
         #toc-list li { padding: 3px 0; }
@@ -530,6 +555,8 @@
             .document-tab-select { max-width: 150px; }
             #toc-panel { width: 200px; }
             .template-grid { grid-template-columns: 1fr; }
+            .appearance-grid { grid-template-columns: 1fr; }
+            .appearance-field-wide { grid-column: auto; }
             /* Hamburger: collapse toolbar into wrap */
         }
 
@@ -641,30 +668,34 @@
             <div class="overflow-menu" role="group" aria-label="More tools and settings">
                 <button id="plantuml-settings-btn" type="button"><i data-lucide="workflow"></i>PlantUML server</button>
                 <button id="shortcuts-btn" type="button"><i data-lucide="keyboard"></i>Keyboard shortcuts</button>
-                <div class="overflow-field">
-                    <label for="font-preset-select" id="font-preset-label">Fonts</label>
-                    <select id="font-preset-select" title="Choose preview font combination" aria-labelledby="font-preset-label">
-                        <option value="modern">Modern</option>
-                        <option value="editorial">Editorial</option>
-                        <option value="classic">Classic</option>
-                        <option value="technical">Technical</option>
-                    </select>
-                </div>
-                <div class="overflow-field">
-                    <label for="theme-select" id="theme-label">Theme</label>
-                    <select id="theme-select" title="Choose preview theme" aria-labelledby="theme-label">
-                        <option value="light">Light</option>
-                        <option value="dark">Dark</option>
-                        <option value="solarized">Solarized</option>
-                        <option value="high-contrast">High Contrast</option>
-                    </select>
-                </div>
-                <div class="overflow-field">
-                    <label for="profile-select" id="profile-label">Profile</label>
-                    <select id="profile-select" title="Choose Markdown parsing profile" aria-labelledby="profile-label">
-                        <option value="gfm">GitHub</option>
-                        <option value="commonmark">CommonMark</option>
-                    </select>
+                <button id="appearance-btn" type="button"><i data-lucide="palette"></i>Preview appearance</button>
+                <div class="overflow-settings">
+                    <div class="overflow-field">
+                        <label for="font-preset-select" id="font-preset-label">Preset</label>
+                        <select id="font-preset-select" title="Choose preview appearance preset" aria-labelledby="font-preset-label">
+                            <option value="modern">Modern</option>
+                            <option value="editorial">Editorial</option>
+                            <option value="classic">Classic</option>
+                            <option value="technical">Technical</option>
+                            <option value="custom" disabled>Custom</option>
+                        </select>
+                    </div>
+                    <div class="overflow-field">
+                        <label for="theme-select" id="theme-label">Theme</label>
+                        <select id="theme-select" title="Choose preview theme" aria-labelledby="theme-label">
+                            <option value="light">Light</option>
+                            <option value="dark">Dark</option>
+                            <option value="solarized">Solarized</option>
+                            <option value="high-contrast">High Contrast</option>
+                        </select>
+                    </div>
+                    <div class="overflow-field">
+                        <label for="profile-select" id="profile-label">Profile</label>
+                        <select id="profile-select" title="Choose Markdown parsing profile" aria-labelledby="profile-label">
+                            <option value="gfm">GitHub</option>
+                            <option value="commonmark">CommonMark</option>
+                        </select>
+                    </div>
                 </div>
             </div>
         </details>
@@ -767,9 +798,93 @@
         <div class="settings-actions"><button class="secondary" type="button" data-close-dialog>Cancel</button></div>
     </dialog>
 
+    <dialog id="appearance-dialog" class="settings-dialog appearance-dialog" aria-labelledby="appearance-title">
+        <form id="appearance-form">
+            <h2 id="appearance-title">Preview appearance</h2>
+            <div class="appearance-grid">
+                <div class="appearance-field appearance-field-wide">
+                    <label for="appearance-preset">Preset</label>
+                    <select id="appearance-preset">
+                        <option value="modern">Modern</option>
+                        <option value="editorial">Editorial</option>
+                        <option value="classic">Classic</option>
+                        <option value="technical">Technical</option>
+                        <option value="custom">Custom</option>
+                    </select>
+                </div>
+                <div class="appearance-field">
+                    <label for="appearance-body-font">Body font</label>
+                    <select id="appearance-body-font">
+                        <optgroup label="System fonts">
+                            <option value="system-sans">System sans</option><option value="system-serif">System serif</option>
+                        </optgroup>
+                        <optgroup label="Google Fonts">
+                            <option value="source-sans-3">Source Sans 3</option><option value="ibm-plex-sans">IBM Plex Sans</option>
+                            <option value="lora">Lora</option><option value="merriweather">Merriweather</option>
+                        </optgroup>
+                    </select>
+                </div>
+                <div class="appearance-field">
+                    <label for="appearance-heading-font">Heading font</label>
+                    <select id="appearance-heading-font">
+                        <optgroup label="System fonts">
+                            <option value="system-sans">System sans</option><option value="system-serif">System serif</option>
+                        </optgroup>
+                        <optgroup label="Google Fonts">
+                            <option value="source-sans-3">Source Sans 3</option><option value="playfair-display">Playfair Display</option>
+                            <option value="oswald">Oswald</option><option value="lora">Lora</option>
+                        </optgroup>
+                    </select>
+                </div>
+                <div class="appearance-field">
+                    <label for="appearance-code-font">Code font</label>
+                    <select id="appearance-code-font">
+                        <optgroup label="System fonts"><option value="system-mono">System mono</option><option value="courier">Courier</option></optgroup>
+                        <optgroup label="Google Fonts">
+                            <option value="jetbrains-mono">JetBrains Mono</option><option value="fira-code">Fira Code</option>
+                            <option value="ibm-plex-mono">IBM Plex Mono</option>
+                        </optgroup>
+                    </select>
+                </div>
+                <div class="appearance-field">
+                    <label for="appearance-width">Content width</label>
+                    <select id="appearance-width">
+                        <option value="680px">Narrow</option><option value="800px">Reading</option>
+                        <option value="1000px">Wide</option><option value="100%">Full</option>
+                    </select>
+                </div>
+                <div class="appearance-field">
+                    <label for="appearance-body-size">Body size <output id="appearance-body-size-value">16px</output></label>
+                    <input id="appearance-body-size" type="range" min="12" max="24" step="1" value="16">
+                </div>
+                <div class="appearance-field">
+                    <label for="appearance-code-size">Code size <output id="appearance-code-size-value">14px</output></label>
+                    <input id="appearance-code-size" type="range" min="10" max="20" step="1" value="14">
+                </div>
+                <div class="appearance-field">
+                    <label for="appearance-line-height">Line height <output id="appearance-line-height-value">1.6</output></label>
+                    <input id="appearance-line-height" type="range" min="1.2" max="2.2" step="0.1" value="1.6">
+                </div>
+                <div class="appearance-field">
+                    <label for="appearance-paragraph-spacing">Paragraph spacing <output id="appearance-paragraph-spacing-value">16px</output></label>
+                    <input id="appearance-paragraph-spacing" type="range" min="4" max="32" step="2" value="16">
+                </div>
+            </div>
+            <div class="appearance-toggles">
+                <label><input id="appearance-code-wrap" type="checkbox"> Wrap code blocks</label>
+                <label><input id="appearance-compact-tables" type="checkbox"> Compact tables</label>
+            </div>
+            <div class="settings-actions">
+                <button id="appearance-reset-btn" class="secondary" type="button">Reset</button>
+                <button class="secondary" type="button" data-close-dialog>Cancel</button>
+                <button type="submit">Save</button>
+            </div>
+        </form>
+    </dialog>
+
     <div class="document-bar">
         <div id="document-tabs" role="tablist" aria-label="Open documents"></div>
-        <button id="new-document-btn" title="New document (Ctrl+N)" aria-label="New document">+</button>
+        <button id="new-document-btn" title="New document (Ctrl+N)" aria-label="New document"><i data-lucide="plus"></i></button>
         <div id="layout-switcher" class="layout-switcher" role="group" aria-label="Workspace layout">
             <button type="button" data-layout="editor" aria-pressed="false">Editor</button>
             <button type="button" data-layout="split" aria-pressed="true">Split</button>
@@ -862,6 +977,21 @@
         const toolbarOverflow = document.getElementById('toolbar-overflow');
         const shortcutsBtn = document.getElementById('shortcuts-btn');
         const shortcutsDialog = document.getElementById('shortcuts-dialog');
+        const appearanceBtn = document.getElementById('appearance-btn');
+        const appearanceDialog = document.getElementById('appearance-dialog');
+        const appearanceForm = document.getElementById('appearance-form');
+        const appearancePreset = document.getElementById('appearance-preset');
+        const appearanceBodyFont = document.getElementById('appearance-body-font');
+        const appearanceHeadingFont = document.getElementById('appearance-heading-font');
+        const appearanceCodeFont = document.getElementById('appearance-code-font');
+        const appearanceWidth = document.getElementById('appearance-width');
+        const appearanceBodySize = document.getElementById('appearance-body-size');
+        const appearanceCodeSize = document.getElementById('appearance-code-size');
+        const appearanceLineHeight = document.getElementById('appearance-line-height');
+        const appearanceParagraphSpacing = document.getElementById('appearance-paragraph-spacing');
+        const appearanceCodeWrap = document.getElementById('appearance-code-wrap');
+        const appearanceCompactTables = document.getElementById('appearance-compact-tables');
+        const appearanceResetBtn = document.getElementById('appearance-reset-btn');
         const plantUmlSettingsBtn = document.getElementById('plantuml-settings-btn');
         const plantUmlSettingsDialog = document.getElementById('plantuml-settings-dialog');
         const plantUmlSettingsForm = document.getElementById('plantuml-settings-form');
@@ -912,6 +1042,21 @@
                 bodySize: '14px',
                 codeSize: '13px'
             }
+        };
+        const FONT_CHOICES = {
+            'system-sans': { family: "'Segoe UI', Tahoma, Geneva, Verdana, sans-serif" },
+            'system-serif': { family: "Georgia, 'Times New Roman', serif" },
+            'system-mono': { family: "'Fira Mono', Consolas, Menlo, Monaco, monospace" },
+            courier: { family: "'Courier New', Courier, monospace" },
+            'source-sans-3': { family: "'Source Sans 3', sans-serif", query: 'Source+Sans+3:wght@400;600;700' },
+            'ibm-plex-sans': { family: "'IBM Plex Sans', sans-serif", query: 'IBM+Plex+Sans:wght@400;600;700' },
+            lora: { family: "Lora, serif", query: 'Lora:wght@400;600;700' },
+            merriweather: { family: "Merriweather, serif", query: 'Merriweather:wght@400;700' },
+            'playfair-display': { family: "'Playfair Display', serif", query: 'Playfair+Display:wght@600;700' },
+            oswald: { family: "Oswald, sans-serif", query: 'Oswald:wght@500;600;700' },
+            'jetbrains-mono': { family: "'JetBrains Mono', monospace", query: 'JetBrains+Mono:wght@400;600' },
+            'fira-code': { family: "'Fira Code', monospace", query: 'Fira+Code:wght@400;600' },
+            'ibm-plex-mono': { family: "'IBM Plex Mono', monospace", query: 'IBM+Plex+Mono:wght@400;600' }
         };
         const DOCUMENT_TEMPLATES = {
             blank: { name: 'document.md', content: '' },
@@ -992,15 +1137,109 @@
         marked.use(globalThis.markedEmoji.markedEmoji({ emojis: emojiAliases, renderer: function(token) { return token.emoji; } }));
         marked.use(globalThis.markedKatex({ throwOnError: false, nonStandard: true }));
 
-        function setFontPreset(presetName) {
+        function appearanceFromPreset(presetName) {
             const preset = FONT_PRESETS[presetName] || FONT_PRESETS.modern;
-            document.documentElement.style.setProperty('--preview-body-font', preset.body);
-            document.documentElement.style.setProperty('--preview-heading-font', preset.heading);
-            document.documentElement.style.setProperty('--preview-code-font', preset.code);
-            document.documentElement.style.setProperty('--preview-body-font-size', preset.bodySize);
-            document.documentElement.style.setProperty('--preview-code-font-size', preset.codeSize);
-            fontPresetSelect.value = FONT_PRESETS[presetName] ? presetName : 'modern';
-            localStorage.setItem('previewFontPreset', fontPresetSelect.value);
+            const fontKeys = {
+                modern: ['system-sans', 'system-sans', 'system-mono'],
+                editorial: ['system-serif', 'system-sans', 'system-mono'],
+                classic: ['system-serif', 'system-serif', 'courier'],
+                technical: ['system-sans', 'system-sans', 'system-mono']
+            }[presetName] || ['system-sans', 'system-sans', 'system-mono'];
+            return {
+                preset: FONT_PRESETS[presetName] ? presetName : 'modern',
+                bodyFont: fontKeys[0], headingFont: fontKeys[1], codeFont: fontKeys[2],
+                bodySize: parseInt(preset.bodySize, 10), codeSize: parseInt(preset.codeSize, 10),
+                lineHeight: presetName === 'editorial' ? 1.75 : presetName === 'technical' ? 1.45 : 1.6,
+                width: presetName === 'technical' ? '1000px' : '800px',
+                paragraphSpacing: presetName === 'technical' ? 10 : 16,
+                codeWrap: false, compactTables: presetName === 'technical'
+            };
+        }
+
+        function normalizeAppearance(settings) {
+            const fallback = appearanceFromPreset('modern');
+            const allowedWidths = ['680px', '800px', '1000px', '100%'];
+            settings = settings && typeof settings === 'object' ? settings : fallback;
+            return {
+                preset: FONT_PRESETS[settings.preset] ? settings.preset : 'custom',
+                bodyFont: FONT_CHOICES[settings.bodyFont] ? settings.bodyFont : fallback.bodyFont,
+                headingFont: FONT_CHOICES[settings.headingFont] ? settings.headingFont : fallback.headingFont,
+                codeFont: FONT_CHOICES[settings.codeFont] ? settings.codeFont : fallback.codeFont,
+                bodySize: Math.min(24, Math.max(12, Number(settings.bodySize) || fallback.bodySize)),
+                codeSize: Math.min(20, Math.max(10, Number(settings.codeSize) || fallback.codeSize)),
+                lineHeight: Math.min(2.2, Math.max(1.2, Number(settings.lineHeight) || fallback.lineHeight)),
+                width: allowedWidths.includes(settings.width) ? settings.width : fallback.width,
+                paragraphSpacing: Math.min(32, Math.max(4, Number(settings.paragraphSpacing) || fallback.paragraphSpacing)),
+                codeWrap: Boolean(settings.codeWrap), compactTables: Boolean(settings.compactTables)
+            };
+        }
+
+        function loadGoogleFonts(settings) {
+            const queries = [...new Set([settings.bodyFont, settings.headingFont, settings.codeFont]
+                .map(function(key) { return FONT_CHOICES[key].query; }).filter(Boolean))];
+            let link = document.getElementById('preview-google-fonts');
+            if (!queries.length) {
+                if (link) link.remove();
+                return;
+            }
+            if (!link) {
+                link = document.createElement('link');
+                link.id = 'preview-google-fonts';
+                link.rel = 'stylesheet';
+                document.head.appendChild(link);
+            }
+            link.href = 'https://fonts.googleapis.com/css2?family=' + queries.join('&family=') + '&display=swap';
+        }
+
+        let currentAppearance;
+        let appearanceBeforeDialog;
+        function applyAppearance(settings, persist = false) {
+            currentAppearance = normalizeAppearance(settings);
+            loadGoogleFonts(currentAppearance);
+            document.documentElement.style.setProperty('--preview-body-font', FONT_CHOICES[currentAppearance.bodyFont].family);
+            document.documentElement.style.setProperty('--preview-heading-font', FONT_CHOICES[currentAppearance.headingFont].family);
+            document.documentElement.style.setProperty('--preview-code-font', FONT_CHOICES[currentAppearance.codeFont].family);
+            document.documentElement.style.setProperty('--preview-body-font-size', currentAppearance.bodySize + 'px');
+            document.documentElement.style.setProperty('--preview-code-font-size', currentAppearance.codeSize + 'px');
+            document.documentElement.style.setProperty('--preview-line-height', currentAppearance.lineHeight);
+            document.documentElement.style.setProperty('--preview-content-width', currentAppearance.width);
+            document.documentElement.style.setProperty('--preview-paragraph-spacing', currentAppearance.paragraphSpacing + 'px');
+            preview.classList.toggle('appearance-code-wrap', currentAppearance.codeWrap);
+            preview.classList.toggle('appearance-compact-tables', currentAppearance.compactTables);
+            fontPresetSelect.value = currentAppearance.preset;
+            if (persist) {
+                localStorage.setItem('previewAppearance', JSON.stringify(currentAppearance));
+                localStorage.setItem('previewFontPreset', currentAppearance.preset);
+            }
+        }
+
+        function populateAppearanceForm() {
+            appearancePreset.value = currentAppearance.preset;
+            appearanceBodyFont.value = currentAppearance.bodyFont;
+            appearanceHeadingFont.value = currentAppearance.headingFont;
+            appearanceCodeFont.value = currentAppearance.codeFont;
+            appearanceWidth.value = currentAppearance.width;
+            appearanceBodySize.value = currentAppearance.bodySize;
+            appearanceCodeSize.value = currentAppearance.codeSize;
+            appearanceLineHeight.value = currentAppearance.lineHeight;
+            appearanceParagraphSpacing.value = currentAppearance.paragraphSpacing;
+            appearanceCodeWrap.checked = currentAppearance.codeWrap;
+            appearanceCompactTables.checked = currentAppearance.compactTables;
+            document.getElementById('appearance-body-size-value').textContent = currentAppearance.bodySize + 'px';
+            document.getElementById('appearance-code-size-value').textContent = currentAppearance.codeSize + 'px';
+            document.getElementById('appearance-line-height-value').textContent = currentAppearance.lineHeight;
+            document.getElementById('appearance-paragraph-spacing-value').textContent = currentAppearance.paragraphSpacing + 'px';
+        }
+
+        function appearanceFromForm() {
+            return {
+                preset: appearancePreset.value,
+                bodyFont: appearanceBodyFont.value, headingFont: appearanceHeadingFont.value,
+                codeFont: appearanceCodeFont.value, width: appearanceWidth.value,
+                bodySize: appearanceBodySize.value, codeSize: appearanceCodeSize.value,
+                lineHeight: appearanceLineHeight.value, paragraphSpacing: appearanceParagraphSpacing.value,
+                codeWrap: appearanceCodeWrap.checked, compactTables: appearanceCompactTables.checked
+            };
         }
 
         function normalizePlantUmlServerUrl(value) {
@@ -1618,10 +1857,57 @@
         setTheme(savedTheme);
 
         fontPresetSelect.addEventListener('change', function() {
-            setFontPreset(fontPresetSelect.value);
-            showToast('Preview fonts updated');
+            if (!FONT_PRESETS[fontPresetSelect.value]) return;
+            applyAppearance(appearanceFromPreset(fontPresetSelect.value), true);
+            showToast('Preview appearance updated');
         });
-        setFontPreset(localStorage.getItem('previewFontPreset') || 'modern');
+        let savedAppearance;
+        try {
+            savedAppearance = JSON.parse(localStorage.getItem('previewAppearance'));
+        } catch (error) {
+            localStorage.removeItem('previewAppearance');
+        }
+        applyAppearance(savedAppearance || appearanceFromPreset(localStorage.getItem('previewFontPreset') || 'modern'));
+
+        appearanceBtn.addEventListener('click', function() {
+            appearanceBeforeDialog = { ...currentAppearance };
+            toolbarOverflow.open = false;
+            populateAppearanceForm();
+            appearanceDialog.dataset.saved = 'false';
+            appearanceDialog.showModal();
+            appearancePreset.focus();
+        });
+        appearanceForm.addEventListener('input', function(event) {
+            if (event.target === appearancePreset && FONT_PRESETS[appearancePreset.value]) {
+                applyAppearance(appearanceFromPreset(appearancePreset.value));
+            } else {
+                appearancePreset.value = 'custom';
+                applyAppearance(appearanceFromForm());
+            }
+            populateAppearanceForm();
+        });
+        appearanceForm.addEventListener('submit', function(event) {
+            event.preventDefault();
+            appearanceDialog.dataset.saved = 'true';
+            applyAppearance(appearanceFromForm(), true);
+            appearanceDialog.close();
+            showToast('Preview appearance saved');
+        });
+        appearanceResetBtn.addEventListener('click', function() {
+            applyAppearance(appearanceFromPreset('modern'));
+            populateAppearanceForm();
+        });
+        appearanceDialog.querySelector('[data-close-dialog]').addEventListener('click', function() {
+            appearanceDialog.close();
+        });
+        appearanceDialog.addEventListener('close', function() {
+            if (appearanceDialog.dataset.saved !== 'true' && appearanceBeforeDialog) {
+                applyAppearance(appearanceBeforeDialog);
+            }
+        });
+        appearanceDialog.addEventListener('cancel', function() {
+            appearanceDialog.dataset.saved = 'false';
+        });
 
         profileSelect.value = localStorage.getItem('markdownProfile') || 'gfm';
         profileSelect.addEventListener('change', function() {
@@ -1831,9 +2117,10 @@
             const previewStyle = getComputedStyle(preview);
             const preStyle = getComputedStyle(preview.querySelector('pre') || preview);
             const headingStyle = getComputedStyle(preview.querySelector('h1, h2, h3, h4, h5, h6') || preview);
-            const codeStyle = getComputedStyle(preview.querySelector('code') || preview);
             const tableHeadingStyle = getComputedStyle(preview.querySelector('th') || preview);
+            const tableCellStyle = getComputedStyle(preview.querySelector('td, th') || preview);
             const blockquoteStyle = getComputedStyle(preview.querySelector('blockquote') || preview);
+            const paragraphStyle = getComputedStyle(preview.querySelector('p') || preview);
             let dependencyCss = '';
             try {
                 const responses = await Promise.all([fetch(HIGHLIGHT_CSS_URL), fetch(KATEX_CSS_URL)]);
@@ -1847,13 +2134,20 @@
             }
             const title = getActiveDocument().name.replace(/\.md$/i, '');
             const escapedTitle = title.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;');
+            const googleFontsLink = document.getElementById('preview-google-fonts');
+            const googleFontsHtml = googleFontsLink
+                ? '<link rel="stylesheet" href="' + googleFontsLink.href.replaceAll('&', '&amp;') + '">\n' : '';
+            const exportMaxWidth = currentAppearance.width === '100%' ? 'none' : currentAppearance.width;
+            const codeWhiteSpace = currentAppearance.codeWrap ? 'pre-wrap' : 'pre';
+            const exportCodeFamily = FONT_CHOICES[currentAppearance.codeFont].family;
             const exportCss =
-                'body{font-family:' + previewStyle.fontFamily + ';font-size:' + previewStyle.fontSize + ';max-width:900px;margin:40px auto;padding:20px;line-height:1.6;' +
+                'body{font-family:' + previewStyle.fontFamily + ';font-size:' + previewStyle.fontSize + ';max-width:' + exportMaxWidth + ';margin:40px auto;padding:20px;line-height:' + currentAppearance.lineHeight + ';' +
                 'background:' + previewStyle.backgroundColor + ';color:' + previewStyle.color + '}' +
                 'h1,h2,h3,h4,h5,h6{font-family:' + headingStyle.fontFamily + '}' +
-                'pre{font-family:' + codeStyle.fontFamily + ';font-size:' + codeStyle.fontSize + ';background:' + preStyle.backgroundColor + ';color:' + preStyle.color + ';padding:16px;border-radius:6px;overflow-x:auto}' +
-                'code{font-family:' + codeStyle.fontFamily + ';font-size:' + codeStyle.fontSize + '}table{border-collapse:collapse;width:100%;margin-top:20px}' +
-                'th,td{padding:10px;text-align:left;border-bottom:1px solid ' + previewStyle.borderColor + '}' +
+                'p{margin-top:' + paragraphStyle.marginTop + ';margin-bottom:' + paragraphStyle.marginBottom + '}' +
+                'pre{font-family:' + exportCodeFamily + ';font-size:' + currentAppearance.codeSize + 'px;background:' + preStyle.backgroundColor + ';color:' + preStyle.color + ';padding:16px;border-radius:6px;overflow-x:auto;white-space:' + codeWhiteSpace + ';word-break:' + (currentAppearance.codeWrap ? 'break-word' : 'normal') + '}' +
+                'code{font-family:' + exportCodeFamily + ';font-size:' + currentAppearance.codeSize + 'px}table{border-collapse:collapse;width:100%;margin-top:20px}' +
+                'th,td{padding:' + tableCellStyle.padding + ';text-align:left;border-bottom:1px solid ' + previewStyle.borderColor + '}' +
                 'th{background:' + tableHeadingStyle.backgroundColor + ';color:' + tableHeadingStyle.color + '}' +
                 'blockquote{border-left:5px solid ' + blockquoteStyle.borderLeftColor + ';margin:5px 0;padding:3px 12px;' +
                 'background:' + blockquoteStyle.backgroundColor + ';color:' + blockquoteStyle.color + '}' +
@@ -1868,7 +2162,7 @@
                 '.footnotes{margin-top:32px;border-top:1px solid #ccc;font-size:.92em}.katex-display{overflow-x:auto;overflow-y:hidden}';
             const html = '<!DOCTYPE html>\n<html lang="en"><head><meta charset="UTF-8">' +
                 '<meta name="viewport" content="width=device-width,initial-scale=1"><title>' + escapedTitle + '</title>\n' +
-                '<style>' + dependencyCss + exportCss + '</style>\n</head><body>' + getCleanPreviewClone().innerHTML + '</body></html>';
+                googleFontsHtml + '<style>' + dependencyCss + exportCss + '</style>\n</head><body>' + getCleanPreviewClone().innerHTML + '</body></html>';
             const blob = new Blob([html], { type: 'text/html' });
             const a = document.createElement('a');
             a.href = URL.createObjectURL(blob);
