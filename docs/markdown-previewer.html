@@ -203,6 +203,7 @@
         #editor-container.drag-over {
             border-color: var(--accent); box-shadow: inset 0 0 10px rgba(76,175,80,0.3);
         }
+        .source-navigation-line { background: color-mix(in srgb, var(--accent) 22%, transparent); }
 
         /* Resizer handle */
         #resizer {
@@ -232,7 +233,8 @@
         #preview tr { border-bottom: 1px solid var(--row-border); }
         #preview pre {
             background: var(--pre-bg); color: var(--pre-fg);
-            border-radius: 6px; padding: 12px 48px 12px 12px; margin: 10px 0;
+            border-radius: 6px; padding: 12px 48px 12px 12px; margin: 10px auto;
+            width: 100%; box-sizing: border-box;
             font-size: var(--preview-code-font-size); font-family: var(--preview-code-font);
             overflow-x: auto; box-shadow: 0 2px 8px var(--pre-shadow); position: relative;
         }
@@ -646,7 +648,8 @@
         <div class="toolbar-group" role="group" aria-label="File actions">
             <button id="open-btn" class="icon-button" title="Open Markdown files (Ctrl+O)" aria-label="Open Markdown files"><i data-lucide="folder-open"></i></button>
             <input type="file" id="open-file-input" accept=".md,.markdown,.txt" multiple hidden tabindex="-1">
-            <input id="filename-input" type="text" value="document.md" title="Filename for saving" aria-label="Filename" readonly>
+            <input id="filename-input" type="text" value="document.md"
+                title="Edit filename; clear it to derive the name from the first heading" aria-label="Filename" readonly>
             <button id="save-btn" class="icon-button" title="Save active Markdown file (Ctrl+S)" aria-label="Save active file"><i data-lucide="save"></i></button>
             <button id="workspace-btn" class="icon-button" title="Back up or restore the workspace" aria-label="Back up or restore workspace"><i data-lucide="archive"></i></button>
         </div>
@@ -1373,6 +1376,8 @@
             automaticLayout: true,
             wordWrap: 'on'
         });
+        const sourceNavigationDecorations = editor.createDecorationsCollection();
+        let sourceNavigationTimeout;
 
         function setLayout(layout) {
             const nextLayout = ['editor', 'split', 'preview'].includes(layout) ? layout : 'split';
@@ -1396,6 +1401,22 @@
             const range = new monaco.Range(position.lineNumber, position.column, position.lineNumber, position.column);
             editor.executeEdits('insert-content', [{ range: range, text: text, forceMoveMarkers: true }]);
             editor.focus();
+        }
+
+        function navigateToSource(line) {
+            setLayout('editor');
+            requestAnimationFrame(function() {
+                editor.layout();
+                editor.setPosition({ lineNumber: line, column: 1 });
+                editor.revealLineInCenter(line, monaco.editor.ScrollType.Immediate);
+                sourceNavigationDecorations.set([{
+                    range: new monaco.Range(line, 1, line, 1),
+                    options: { isWholeLine: true, className: 'source-navigation-line' }
+                }]);
+                clearTimeout(sourceNavigationTimeout);
+                sourceNavigationTimeout = setTimeout(function() { sourceNavigationDecorations.clear(); }, 1600);
+                editor.focus();
+            });
         }
 
         function deriveFilename(markdownText) {
@@ -1597,7 +1618,7 @@
             const processedMarkdown = preprocessMarkdown(markdownText);
             const htmlContent = marked.parse(processedMarkdown, profileOptions);
             preview.innerHTML = DOMPurify.sanitize(htmlContent);
-            annotatePreviewSourceLines(markdownText);
+            annotatePreviewSourceLines(processedMarkdown, profileOptions);
             renderPlantUML();
 
             // Syntax highlight
@@ -1620,68 +1641,36 @@
             responseTime.textContent = '\u26A1 ' + (end - start).toFixed(2) + 'ms';
         }
 
-        function annotatePreviewSourceLines(markdownText) {
+        function annotatePreviewSourceLines(markdownText, profileOptions) {
             const blocks = Array.from(preview.children);
-            const lines = markdownText.split('\n');
-            const sourceLines = [];
-            let index = 0;
-            while (index < lines.length) {
-                const line = lines[index];
-                if (!line.trim()) { index++; continue; }
-                const lineNumber = index + 1;
-                if (index === 0 && /^---\s*$/.test(line)) {
-                    sourceLines.push(lineNumber);
-                    index++;
-                    while (index < lines.length && !/^---\s*$/.test(lines[index])) index++;
-                    index++;
-                    continue;
-                }
-                const fence = line.match(/^\s{0,3}(`{3,}|~{3,})/);
-                if (fence) {
-                    sourceLines.push(lineNumber);
-                    const marker = fence[1][0];
-                    index++;
-                    while (index < lines.length && !new RegExp('^\\s{0,3}' + marker + '{3,}').test(lines[index])) index++;
-                    index++;
-                    continue;
-                }
-                if (/^\$\$\s*$/.test(line)) {
-                    sourceLines.push(lineNumber);
-                    index++;
-                    while (index < lines.length && !/^\$\$\s*$/.test(lines[index])) index++;
-                    index++;
-                    continue;
-                }
-                if (/^:::(note|tip|important|warning|caution)\b/i.test(line)) {
-                    sourceLines.push(lineNumber);
-                    index++;
-                    while (index < lines.length && !/^:::\s*$/.test(lines[index])) index++;
-                    index++;
-                    continue;
-                }
-                if (/^>\s*\[!(note|tip|important|warning|caution)\]/i.test(line)) {
-                    sourceLines.push(lineNumber);
-                    index++;
-                    while (index < lines.length && /^>/.test(lines[index])) index++;
-                    continue;
-                }
-                if (/^\[\^[^\]]+\]:/.test(line)) {
-                    sourceLines.push(lineNumber, lineNumber);
-                    index++;
-                    while (index < lines.length && (/^\s{2,}\S/.test(lines[index]) || !lines[index].trim())) index++;
-                    continue;
-                }
-                sourceLines.push(lineNumber);
-                if (index + 1 < lines.length && /^:\s+/.test(lines[index + 1])) { index += 2; continue; }
-                index++;
-                while (index < lines.length && lines[index].trim() &&
-                    !/^(#{1,6}\s|>|[-*+]\s|\d+[.)]\s|```|~~~|:::|\$\$|\[\^)/.test(lines[index])) index++;
-            }
+            const tokens = marked.lexer(markdownText, profileOptions).filter(function(token) {
+                return token.type !== 'space';
+            });
+            let searchOffset = 0;
+            const tokenLocations = tokens.map(function(token) {
+                const tokenOffset = token.raw ? markdownText.indexOf(token.raw, searchOffset) : -1;
+                if (tokenOffset < 0) return null;
+                searchOffset = tokenOffset + token.raw.length;
+                return { token: token, offset: tokenOffset, line: markdownText.slice(0, tokenOffset).split('\n').length };
+            }).filter(Boolean);
             blocks.forEach(function(block, blockIndex) {
-                const line = sourceLines[blockIndex];
-                if (!line) return;
-                block.dataset.sourceLine = String(line);
-                block.title = 'Go to source line ' + line;
+                const location = tokenLocations[blockIndex] || tokenLocations[tokenLocations.length - 1];
+                if (!location) return;
+                block.dataset.sourceLine = String(location.line);
+                block.title = 'Go to source line ' + location.line;
+                if (location.token.type === 'list') {
+                    let itemSearchOffset = location.offset;
+                    Array.from(block.querySelectorAll(':scope > li')).forEach(function(item, itemIndex) {
+                        const itemToken = location.token.items[itemIndex];
+                        const itemOffset = itemToken && itemToken.raw
+                            ? markdownText.indexOf(itemToken.raw, itemSearchOffset) : -1;
+                        if (itemOffset < 0) return;
+                        const itemLine = markdownText.slice(0, itemOffset).split('\n').length;
+                        item.dataset.sourceLine = String(itemLine);
+                        item.title = 'Go to source line ' + itemLine;
+                        itemSearchOffset = itemOffset + itemToken.raw.length;
+                    });
+                }
             });
         }
 
@@ -1690,10 +1679,7 @@
             const block = event.target.closest('[data-source-line]');
             if (!block) return;
             const line = Number(block.dataset.sourceLine);
-            setLayout('editor');
-            editor.revealLineInCenter(line);
-            editor.setPosition({ lineNumber: line, column: 1 });
-            editor.focus();
+            navigateToSource(line);
         });
 
         // Event delegation for code block copy buttons
@@ -1771,10 +1757,7 @@
                 button.append(lineLabel, document.createElement('br'), document.createTextNode(diagnostic.message));
                 button.addEventListener('click', function() {
                     diagnosticsDialog.close();
-                    setLayout('editor');
-                    editor.revealLineInCenter(diagnostic.line);
-                    editor.setPosition({ lineNumber: diagnostic.line, column: 1 });
-                    editor.focus();
+                    navigateToSource(diagnostic.line);
                 });
                 item.appendChild(button);
                 diagnosticsList.appendChild(item);
@@ -1998,10 +1981,12 @@
             filenameInput.select();
         }
         function commitFilenameEdit() {
+            if (filenameInput.readOnly) return;
             filenameInput.readOnly = true;
             const activeDocument = getActiveDocument();
-            activeDocument.name = filenameInput.value.trim() || 'document.md';
-            activeDocument.filenameCustom = true;
+            const requestedName = filenameInput.value.trim();
+            activeDocument.filenameCustom = Boolean(requestedName);
+            activeDocument.name = requestedName || deriveFilename(editor.getValue());
             filenameInput.value = activeDocument.name;
             renderDocumentTabs();
             scheduleWorkspacePersistence();
@@ -2015,9 +2000,11 @@
                 return;
             }
             if (e.key === 'Enter') {
+                e.preventDefault();
                 commitFilenameEdit();
                 saveBtn.focus();
             } else if (e.key === 'Escape') {
+                e.preventDefault();
                 filenameInput.value = getActiveDocument().name;
                 filenameInput.readOnly = true;
                 saveBtn.focus();
@@ -2182,7 +2169,7 @@
             const button = event.target.closest('[data-template]');
             if (!button) return;
             const template = DOCUMENT_TEMPLATES[button.dataset.template];
-            addDocument(newDocument(template.name, template.content, true));
+            addDocument(newDocument(template.name, template.content, button.dataset.template !== 'blank'));
             templateDialog.close();
         });
         documentTabs.addEventListener('keydown', function(event) {
