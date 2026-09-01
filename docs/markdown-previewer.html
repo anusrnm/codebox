@@ -1403,11 +1403,11 @@
             editor.focus();
         }
 
-        function navigateToSource(line) {
-            setLayout('editor');
+        function navigateToSource(line, column = 1) {
+            if (document.body.classList.contains('layout-preview')) setLayout('editor');
             requestAnimationFrame(function() {
                 editor.layout();
-                editor.setPosition({ lineNumber: line, column: 1 });
+            editor.setPosition({ lineNumber: line, column: column });
                 editor.revealLineInCenter(line, monaco.editor.ScrollType.Immediate);
                 sourceNavigationDecorations.set([{
                     range: new monaco.Range(line, 1, line, 1),
@@ -1618,7 +1618,7 @@
             const processedMarkdown = preprocessMarkdown(markdownText);
             const htmlContent = marked.parse(processedMarkdown, profileOptions);
             preview.innerHTML = DOMPurify.sanitize(htmlContent);
-            annotatePreviewSourceLines(processedMarkdown, profileOptions);
+            annotatePreviewSourceLines(processedMarkdown, profileOptions, markdownText);
             renderPlantUML();
 
             // Syntax highlight
@@ -1641,8 +1641,31 @@
             responseTime.textContent = '\u26A1 ' + (end - start).toFixed(2) + 'ms';
         }
 
-        function annotatePreviewSourceLines(markdownText, profileOptions) {
+        function normalizeSourceText(value) {
+            return value.toLowerCase()
+                .replace(/^\s*(?:#{1,6}|>|[-*+]|\d+[.)]|:)\s*/, '')
+                .replace(/^:::(?:note|tip|important|warning|caution)\s*/i, '')
+                .replace(/^\[!(note|tip|important|warning|caution)\]\s*/i, '$1 ')
+                .replace(/\[\^[^\]]+\]/g, '')
+                .replace(/↩/g, '')
+                .replace(/[`*_~]/g, '')
+                .replace(/<[^>]+>/g, '')
+                .replace(/\s+/g, ' ')
+                .trim();
+        }
+
+        function sourceContentColumn(line) {
+            const footnotePrefix = line.match(/^\s*\[\^[^\]]+\]:\s*/);
+            if (footnotePrefix) return footnotePrefix[0].length + 1;
+            const alertPrefix = line.match(/^\s*>\s*\[!/);
+            if (alertPrefix) return alertPrefix[0].length + 1;
+            const prefix = line.match(/^\s*(?:#{1,6}|>|[-*+]|\d+[.)]|:)\s*/);
+            return (prefix ? prefix[0].length : 0) + 1;
+        }
+
+        function annotatePreviewSourceLines(markdownText, profileOptions, originalMarkdown) {
             const blocks = Array.from(preview.children);
+            const originalLines = originalMarkdown.split('\n');
             const tokens = marked.lexer(markdownText, profileOptions).filter(function(token) {
                 return token.type !== 'space';
             });
@@ -1656,7 +1679,11 @@
             blocks.forEach(function(block, blockIndex) {
                 const location = tokenLocations[blockIndex] || tokenLocations[tokenLocations.length - 1];
                 if (!location) return;
+                const nextLocation = tokenLocations[blockIndex + 1];
+                const endLine = nextLocation ? nextLocation.line - 1 : originalLines.length;
                 block.dataset.sourceLine = String(location.line);
+                block.dataset.sourceColumn = String(sourceContentColumn(originalLines[location.line - 1] || ''));
+                block.dataset.sourceEndLine = String(endLine);
                 block.title = 'Go to source line ' + location.line;
                 if (location.token.type === 'list') {
                     let itemSearchOffset = location.offset;
@@ -1667,10 +1694,26 @@
                         if (itemOffset < 0) return;
                         const itemLine = markdownText.slice(0, itemOffset).split('\n').length;
                         item.dataset.sourceLine = String(itemLine);
+                        item.dataset.sourceColumn = String(sourceContentColumn(originalLines[itemLine - 1] || ''));
                         item.title = 'Go to source line ' + itemLine;
                         itemSearchOffset = itemOffset + itemToken.raw.length;
                     });
                 }
+
+                let childSearchLine = Math.max(0, location.line - 2);
+                block.querySelectorAll('p, dt, dd').forEach(function(child) {
+                    const childText = normalizeSourceText(child.textContent);
+                    if (!childText) return;
+                    for (let lineIndex = childSearchLine; lineIndex < endLine; lineIndex++) {
+                        const sourceText = normalizeSourceText(originalLines[lineIndex] || '');
+                        if (!sourceText || (!sourceText.includes(childText) && !childText.includes(sourceText))) continue;
+                        child.dataset.sourceLine = String(lineIndex + 1);
+                        child.dataset.sourceColumn = String(sourceContentColumn(originalLines[lineIndex] || ''));
+                        child.title = 'Go to source line ' + (lineIndex + 1);
+                        childSearchLine = lineIndex;
+                        break;
+                    }
+                });
             });
         }
 
@@ -1678,8 +1721,31 @@
             if (event.target.closest('a, button, input')) return;
             const block = event.target.closest('[data-source-line]');
             if (!block) return;
-            const line = Number(block.dataset.sourceLine);
-            navigateToSource(line);
+            let line = Number(block.dataset.sourceLine);
+            let column = Number(block.dataset.sourceColumn || 1);
+            const caret = document.caretPositionFromPoint
+                ? document.caretPositionFromPoint(event.clientX, event.clientY)
+                : null;
+            if (caret && caret.offsetNode.nodeType === Node.TEXT_NODE) {
+                const text = caret.offsetNode.textContent || '';
+                const word = Array.from(text.matchAll(/[\p{L}\p{N}_-]+/gu)).find(function(match) {
+                    return caret.offset >= match.index && caret.offset <= match.index + match[0].length;
+                });
+                const sourceContainer = block.closest('[data-source-end-line]') || block;
+                const endLine = Number(sourceContainer.dataset.sourceEndLine || line);
+                if (word) {
+                    const model = editor.getModel();
+                    for (let sourceLine = line; sourceLine <= endLine; sourceLine++) {
+                        const sourceText = model.getLineContent(sourceLine);
+                        const wordColumn = sourceText.toLocaleLowerCase().indexOf(word[0].toLocaleLowerCase());
+                        if (wordColumn < 0) continue;
+                        line = sourceLine;
+                        column = wordColumn + 1;
+                        break;
+                    }
+                }
+            }
+            navigateToSource(line, column);
         });
 
         // Event delegation for code block copy buttons
