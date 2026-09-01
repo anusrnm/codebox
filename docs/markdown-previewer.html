@@ -7,13 +7,29 @@
     <link
     href="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAABmJLR0QA/wD/AP+gvaeTAAABnklEQVQ4jY2TvUtjURDFf3M1Xy6yYKU26vonRNBo3tqIoha6WKyV21qk8G8QBLET7bZRcMEsKBaCxkqMMT7dKq34EVi23jbRvNnC96J5ubKe7t4558zMvTNCCKoIeYYxTAA9/vUDhhwpiiLoa740iAukUDaAZNjYxy+UjDi4TQZaYB5lC4i9IQ5QAb5JmmzdwM98CkT/I34xUUbFwTWqiF92FMDzYH0vTr7U2qD4fhjjyI0ExxjCpipiKDDyumdPYfVHgpWdRF1887uF5e0Ee2cNBQ5QJGWA8XB98ajy8YNy98cAsJ+PMjX02NyIx4RB6LU1+cWpcnD+nPHkOsJY0mIAPQZt/NcA00OPHLkRSrctfOqq0Ra30tQAZVukvU3p7FDWdhPMOlUbBZSywSNnj8KsUyVfamUs+WQnCMcGhwvg0haf+1ylnP1LLGIpX7liBNeIoChL/oRhBBZnKk38/m6PycH6Q1YwZETQl1E+5yuw/c5RXpA0PwFMvZ00WZRR4PpNqXKF4ARiwttIsM5FUtQYR+jzhfcYcgxzGV7nf+vtg1qvRt6KAAAAAElFTkSuQmCC"
     rel="icon" type="image/x-icon" />
+    <script>
+        globalThis.showStartupError = function(message) {
+            function displayError() {
+                const overlay = document.getElementById('loading-overlay');
+                if (!overlay) return;
+                overlay.textContent = message;
+                overlay.setAttribute('role', 'alert');
+                overlay.setAttribute('aria-label', message);
+            }
+            if (document.readyState === 'loading') {
+                document.addEventListener('DOMContentLoaded', displayError, { once: true });
+            } else {
+                displayError();
+            }
+        };
+    </script>
     <!-- CDN for marked (UMD, pinned) -->
-    <script src="https://cdn.jsdelivr.net/npm/marked@15.0.4/marked.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/marked@15.0.4/marked.min.js"
+        onerror="showStartupError('Unable to load the Markdown parser. Check your connection and reload.')"></script>
 
     <!-- CDN for DOMPurify (pinned) -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/2.4.0/purify.min.js"
-        integrity="sha384-Tsl3d5pUAO7a13enIvSsL3O0/95nsthPJiPto5NtLuY8w3+LbZOpr3Fl2MNmrh1E"
-        crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/dompurify@3.4.14/dist/purify.min.js"
+        onerror="showStartupError('Unable to load the HTML sanitizer. Check your connection and reload.')"></script>
 
     <!-- Highlight.js CDN (pinned, single bundle) -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.11.1/styles/default.min.css"
@@ -21,10 +37,12 @@
         crossorigin="anonymous">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.11.1/highlight.min.js"
         integrity="sha384-RH2xi4eIQ/gjtbs9fUXM68sLSi99C7ZWBRX1vDrVv6GQXRibxXLbwO2NGZB74MbU"
-        crossorigin="anonymous"></script>
+        crossorigin="anonymous"
+        onerror="showStartupError('Unable to load syntax highlighting. Check your connection and reload.')"></script>
 
     <!-- Mermaid diagram renderer (pinned) -->
-    <script src="https://cdn.jsdelivr.net/npm/mermaid@11.16.1/dist/mermaid.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/mermaid@11.16.1/dist/mermaid.min.js"
+        onerror="showStartupError('Unable to load Mermaid. Check your connection and reload.')"></script>
 
     <style>
         /* --- CSS Custom Properties --- */
@@ -163,7 +181,7 @@
             flex-shrink: 0;
             transition: background 0.2s;
         }
-        #resizer:hover { background: var(--accent); }
+        #resizer:hover, #resizer:focus-visible { background: var(--accent); }
 
         #preview {
             border: 1px solid var(--preview-border);
@@ -203,15 +221,40 @@
             display: flex; gap: 8px; align-items: center;
             margin-bottom: 8px; flex-wrap: wrap; padding: 4px 0;
         }
+        .toolbar-group { display: flex; gap: 6px; align-items: center; }
         button {
             padding: 8px 16px; background-color: var(--accent); color: white;
             border: none; cursor: pointer; border-radius: 4px;
             transition: background 0.2s; font-size: 14px;
         }
         button:hover { background-color: var(--accent-hover); }
+        .document-bar {
+            display: flex; align-items: center; gap: 6px; min-height: 38px;
+            margin-bottom: 8px; border-bottom: 1px solid var(--preview-border);
+        }
+        #document-tabs {
+            display: flex; align-self: stretch; gap: 2px; min-width: 0;
+            flex: 0 1 auto; width: max-content; max-width: calc(100% - 44px);
+            overflow-x: auto; overflow-y: hidden; scrollbar-width: thin;
+        }
+        .document-tab { display: flex; align-items: center; flex: 0 0 auto; }
+        .document-tab-select {
+            max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+            border-radius: 4px 0 0 0; background: var(--th-bg); color: var(--fg);
+            border: 1px solid transparent; border-bottom: none;
+        }
+        .document-tab-select[aria-selected="true"] {
+            background: var(--preview-bg); border-color: var(--preview-border);
+            box-shadow: inset 0 3px 0 var(--accent);
+        }
+        .document-tab-close {
+            padding: 8px; border-radius: 0 4px 0 0; background: var(--th-bg);
+            color: var(--fg); font-size: 16px; line-height: 1;
+        }
+        #new-document-btn { flex: 0 0 auto; padding: 6px 10px; font-size: 18px; line-height: 1; }
         .input-wrapper {
             position: relative; flex: 1 1 50%; display: flex; flex-direction: column;
-            min-height: 0;
+            min-width: 0; min-height: 0;
         }
         .input-stats {
             position: absolute; bottom: 6px; right: 12px; z-index: 2;
@@ -254,7 +297,6 @@
         }
         #toc-panel.collapsed { transform: translateX(100%); }
         #toc-toggle {
-            position: fixed; top: 8px; right: 8px; z-index: 101;
             padding: 6px 12px; font-size: 13px;
         }
         #toc-list { list-style: none; padding: 0; margin-top: 8px; }
@@ -297,7 +339,12 @@
         @keyframes spin { to { transform: rotate(360deg); } }
 
         /* --- Zen Mode --- */
+        #zen-exit-btn {
+            display: none; position: fixed; top: 12px; right: 12px; z-index: 102;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+        }
         .zen-mode .toolbar,
+        .zen-mode .document-bar,
         .zen-mode #toc-toggle,
         .zen-mode #toc-panel,
         .zen-mode .input-stats { display: none !important; }
@@ -305,6 +352,7 @@
         .zen-mode .main-content #preview {
             height: 100% !important;
         }
+        .zen-mode #zen-exit-btn { display: block; }
 
         /* --- Responsive --- */
         @media (max-width: 900px) {
@@ -312,7 +360,9 @@
             #editor-container, #preview, .input-wrapper { min-width: 0; width: 100%; min-height: 200px; }
             #resizer { display: none; }
             .toolbar { gap: 4px; }
+            .toolbar-group { flex-wrap: wrap; }
             .toolbar button { padding: 6px 10px; font-size: 13px; }
+            .document-tab-select { max-width: 150px; }
             #toc-panel { width: 200px; }
             /* Hamburger: collapse toolbar into wrap */
         }
@@ -325,6 +375,8 @@
                 padding: 0 !important;
                 display: block !important;
                 height: auto !important;
+                background-color: var(--preview-bg) !important;
+                transition: none !important;
                 -webkit-print-color-adjust: exact !important;
                 print-color-adjust: exact !important;
             }
@@ -335,7 +387,7 @@
             #preview input[type="checkbox"]:checked {
                 background: var(--accent) !important; border-color: var(--accent) !important;
             }
-            .toolbar, .input-wrapper, #resizer, #toc-panel, #toc-toggle,
+            .toolbar, .document-bar, .input-wrapper, #resizer, #toc-panel, #toc-toggle, #zen-exit-btn,
             .input-stats, #toast-container, #loading-overlay {
                 display: none !important;
             }
@@ -349,6 +401,7 @@
                 min-height: 0 !important;
                 border: none !important;
                 height: auto !important; max-height: none !important;
+                background-color: var(--preview-bg) !important;
                 padding: 0 !important; overflow: visible !important; flex: none !important;
             }
             #preview > :first-child { margin-top: 0 !important; }
@@ -386,31 +439,44 @@
     </output>
 
     <!-- TOC panel -->
-    <button id="toc-toggle" title="Toggle Table of Contents" aria-label="Toggle Table of Contents">TOC</button>
-    <nav id="toc-panel" class="collapsed" aria-label="Table of Contents">
+    <nav id="toc-panel" class="collapsed" aria-label="Table of Contents" hidden>
         <strong>Table of Contents</strong>
         <ul id="toc-list"></ul>
     </nav>
 
     <!-- Toast container -->
     <div id="toast-container" aria-live="polite"></div>
+    <button id="zen-exit-btn" title="Exit zen mode (Escape)" aria-label="Exit zen mode">Exit Zen</button>
 
     <div class="toolbar" role="toolbar" aria-label="Editor toolbar">
-        <button id="open-btn" title="Open a .md file (Ctrl+O)" aria-label="Open Markdown file">Open</button>
-        <input type="file" id="open-file-input" accept=".md,.markdown,.txt" hidden tabindex="-1">
-        <button id="copy-btn" title="Copy rendered HTML to clipboard (Ctrl+Shift+C)" aria-label="Copy HTML">Copy HTML</button>
-        <button id="export-html-btn" title="Export preview as standalone HTML file" aria-label="Export HTML">Export HTML</button>
-        <button id="print-btn" title="Print preview (Ctrl+P)" aria-label="Print">Print</button>
-        <input id="filename-input" type="text" value="document.md" title="Filename for saving" aria-label="Filename" readonly>
-        <button id="save-btn" title="Save Markdown to file (Ctrl+S)" aria-label="Save">Save</button>
-        <button id="zen-btn" title="Toggle zen mode (distraction-free)" aria-label="Toggle zen mode">Zen</button>
-        <label for="theme-select" id="theme-label">Theme:</label>
-        <select id="theme-select" title="Choose preview theme" aria-labelledby="theme-label">
-            <option value="light">Light</option>
-            <option value="dark">Dark</option>
-            <option value="solarized">Solarized</option>
-            <option value="high-contrast">High Contrast</option>
-        </select>
+        <div class="toolbar-group">
+            <button id="open-btn" title="Open Markdown files (Ctrl+O)" aria-label="Open Markdown files">Open</button>
+            <input type="file" id="open-file-input" accept=".md,.markdown,.txt" multiple hidden tabindex="-1">
+            <input id="filename-input" type="text" value="document.md" title="Filename for saving" aria-label="Filename" readonly>
+            <button id="save-btn" title="Save active Markdown file (Ctrl+S)" aria-label="Save active file">Save</button>
+        </div>
+        <div class="toolbar-group">
+            <button id="copy-btn" title="Copy rendered HTML to clipboard (Ctrl+Shift+C)" aria-label="Copy HTML">Copy HTML</button>
+            <button id="export-html-btn" title="Export preview as standalone HTML file" aria-label="Export HTML">Export HTML</button>
+            <button id="print-btn" title="Print preview (Ctrl+P)" aria-label="Print">Print</button>
+        </div>
+        <div class="toolbar-group">
+            <button id="zen-btn" title="Toggle zen mode (distraction-free)" aria-label="Toggle zen mode">Zen</button>
+            <button id="toc-toggle" title="Toggle Table of Contents" aria-label="Toggle Table of Contents"
+                aria-controls="toc-panel" aria-expanded="false">TOC</button>
+            <label for="theme-select" id="theme-label">Theme:</label>
+            <select id="theme-select" title="Choose preview theme" aria-labelledby="theme-label">
+                <option value="light">Light</option>
+                <option value="dark">Dark</option>
+                <option value="solarized">Solarized</option>
+                <option value="high-contrast">High Contrast</option>
+            </select>
+        </div>
+    </div>
+
+    <div class="document-bar">
+        <div id="document-tabs" role="tablist" aria-label="Open documents"></div>
+        <button id="new-document-btn" title="New document (Ctrl+N)" aria-label="New document">+</button>
     </div>
 
     <div class="main-content">
@@ -422,14 +488,29 @@
                 <span id="response-time" title="Conversion time">&#9889;</span>
             </div>
         </div>
-        <hr id="resizer" aria-label="Resize panels">
+        <div id="resizer" role="separator" tabindex="0" aria-label="Resize editor and preview panels"
+            aria-orientation="vertical" aria-valuemin="15" aria-valuemax="85" aria-valuenow="50"></div>
         <section id="preview" aria-label="Markdown preview"></section>
     </div>
 
-    <script src="https://cdn.jsdelivr.net/npm/monaco-editor@0.56.0/min/vs/loader.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/monaco-editor@0.56.0/min/vs/loader.js"
+        onerror="showStartupError('Unable to load the editor. Check your connection and reload.')"></script>
     <script>
+    if (!globalThis.require) {
+        showStartupError('Unable to start the editor. Check your connection and reload.');
+    } else {
     require.config({ paths: { vs: 'https://cdn.jsdelivr.net/npm/monaco-editor@0.56.0/min/vs' } });
-    require(['vs/editor/editor.main'], function () {
+    require(['vs/editor/editor.main'], async function () {
+        const missingDependency = [
+            ['Markdown parser', globalThis.marked],
+            ['HTML sanitizer', globalThis.DOMPurify],
+            ['syntax highlighter', globalThis.hljs],
+            ['Mermaid renderer', globalThis.mermaid]
+        ].find(function(dependency) { return !dependency[1]; });
+        if (missingDependency) {
+            showStartupError('Unable to start: ' + missingDependency[0] + ' did not load. Reload to try again.');
+            return;
+        }
         const editorContainer = document.getElementById('editor-container');
         const preview = document.getElementById('preview');
         const copyBtn = document.getElementById('copy-btn');
@@ -444,13 +525,119 @@
         const openBtn = document.getElementById('open-btn');
         const openFileInput = document.getElementById('open-file-input');
         const zenBtn = document.getElementById('zen-btn');
+        const zenExitBtn = document.getElementById('zen-exit-btn');
         const tocPanel = document.getElementById('toc-panel');
         const tocToggle = document.getElementById('toc-toggle');
         const tocList = document.getElementById('toc-list');
         const toastContainer = document.getElementById('toast-container');
         const resizer = document.getElementById('resizer');
         const loadingOverlay = document.getElementById('loading-overlay');
-        let filenameWasEdited = localStorage.getItem('markdownFilenameCustom') === 'true';
+        const documentTabs = document.getElementById('document-tabs');
+        const newDocumentBtn = document.getElementById('new-document-btn');
+        const DB_NAME = 'markdown-previewer';
+        const DB_VERSION = 1;
+        let documents = [];
+        let activeDocumentId;
+        let persistenceWarningShown = false;
+        let persistTimeout;
+        let isSwitchingDocument = false;
+        let renderGeneration = 0;
+        const HIGHLIGHT_CSS_URL = 'https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.11.1/styles/default.min.css';
+
+        function newDocument(name = 'document.md', content = '', filenameCustom = false) {
+            return {
+                id: globalThis.crypto && crypto.randomUUID ? crypto.randomUUID() : Date.now() + '-' + Math.random(),
+                name: name,
+                content: content,
+                filenameCustom: filenameCustom
+            };
+        }
+
+        function openWorkspaceDatabase() {
+            return new Promise(function(resolve, reject) {
+                if (!globalThis.indexedDB) {
+                    reject(new Error('IndexedDB is unavailable'));
+                    return;
+                }
+                const request = indexedDB.open(DB_NAME, DB_VERSION);
+                request.onupgradeneeded = function() {
+                    request.result.createObjectStore('workspace', { keyPath: 'id' });
+                };
+                request.onsuccess = function() { resolve(request.result); };
+                request.onerror = function() { reject(request.error); };
+            });
+        }
+
+        async function loadWorkspace() {
+            try {
+                const database = await openWorkspaceDatabase();
+                const workspace = await new Promise(function(resolve, reject) {
+                    const transaction = database.transaction('workspace', 'readonly');
+                    const request = transaction.objectStore('workspace').get('current');
+                    request.onsuccess = function() { resolve(request.result); };
+                    request.onerror = function() { reject(request.error); };
+                });
+                database.close();
+                if (workspace && Array.isArray(workspace.documents) && workspace.documents.length) return workspace;
+            } catch (error) {
+                console.warn('Unable to load IndexedDB workspace:', error);
+            }
+
+            try {
+                const fallback = JSON.parse(localStorage.getItem('markdownWorkspace'));
+                if (fallback && Array.isArray(fallback.documents) && fallback.documents.length) return fallback;
+            } catch (error) {
+                console.warn('Unable to load fallback workspace:', error);
+            }
+
+            const migrated = newDocument(
+                localStorage.getItem('markdownFilename') || 'document.md',
+                localStorage.getItem('markdownInput') || '',
+                localStorage.getItem('markdownFilenameCustom') === 'true'
+            );
+            return { documents: [migrated], activeDocumentId: migrated.id };
+        }
+
+        async function persistWorkspace() {
+            const workspace = { id: 'current', documents: documents, activeDocumentId: activeDocumentId };
+            try {
+                const database = await openWorkspaceDatabase();
+                await new Promise(function(resolve, reject) {
+                    const transaction = database.transaction('workspace', 'readwrite');
+                    transaction.objectStore('workspace').put(workspace);
+                    transaction.oncomplete = resolve;
+                    transaction.onerror = function() { reject(transaction.error); };
+                });
+                database.close();
+                return;
+            } catch (error) {
+                console.warn('Unable to persist IndexedDB workspace:', error);
+            }
+
+            try {
+                localStorage.setItem('markdownWorkspace', JSON.stringify(workspace));
+            } catch (error) {
+                console.error('Unable to persist workspace:', error);
+                if (!persistenceWarningShown) {
+                    persistenceWarningShown = true;
+                    showToast('Workspace is too large to store locally', 4000);
+                }
+            }
+        }
+
+        function scheduleWorkspacePersistence() {
+            clearTimeout(persistTimeout);
+            persistTimeout = setTimeout(persistWorkspace, 300);
+        }
+
+        const initialWorkspace = await loadWorkspace();
+        documents = initialWorkspace.documents;
+        activeDocumentId = documents.some(function(document) { return document.id === initialWorkspace.activeDocumentId; })
+            ? initialWorkspace.activeDocumentId : documents[0].id;
+
+        function getActiveDocument() {
+            return documents.find(function(document) { return document.id === activeDocumentId; });
+        }
 
         // Monaco theme mirroring the app's own theme switcher (kept per requirements)
         monaco.editor.defineTheme('solarized', {
@@ -467,7 +654,7 @@
         }
 
         const editor = monaco.editor.create(editorContainer, {
-            value: localStorage.getItem('markdownInput') || '',
+            value: getActiveDocument().content,
             language: 'markdown',
             automaticLayout: true,
             wordWrap: 'on'
@@ -497,7 +684,88 @@
         }
 
         function updateFilenameFromTitle(markdownText) {
-            if (!filenameWasEdited) filenameInput.value = deriveFilename(markdownText);
+            const activeDocument = getActiveDocument();
+            if (!activeDocument.filenameCustom) {
+                activeDocument.name = deriveFilename(markdownText);
+                filenameInput.value = activeDocument.name;
+            }
+        }
+
+        function renderDocumentTabs() {
+            documentTabs.replaceChildren();
+            documents.forEach(function(openDocument) {
+                const wrapper = document.createElement('div');
+                wrapper.className = 'document-tab';
+
+                const selectButton = document.createElement('button');
+                selectButton.className = 'document-tab-select';
+                selectButton.type = 'button';
+                selectButton.role = 'tab';
+                selectButton.title = openDocument.name;
+                selectButton.textContent = openDocument.name;
+                selectButton.setAttribute('aria-selected', String(openDocument.id === activeDocumentId));
+                selectButton.tabIndex = openDocument.id === activeDocumentId ? 0 : -1;
+                selectButton.addEventListener('click', function() { activateDocument(openDocument.id); });
+
+                const closeButton = document.createElement('button');
+                closeButton.className = 'document-tab-close';
+                closeButton.type = 'button';
+                closeButton.title = 'Close ' + openDocument.name;
+                closeButton.setAttribute('aria-label', 'Close ' + openDocument.name);
+                closeButton.textContent = '\u00d7';
+                closeButton.addEventListener('click', function() { closeDocument(openDocument.id); });
+
+                wrapper.append(selectButton, closeButton);
+                documentTabs.appendChild(wrapper);
+            });
+        }
+
+        function activateDocument(documentId) {
+            if (documentId === activeDocumentId) return;
+            getActiveDocument().content = editor.getValue();
+            activeDocumentId = documentId;
+            const activeDocument = getActiveDocument();
+            isSwitchingDocument = true;
+            editor.setValue(activeDocument.content);
+            isSwitchingDocument = false;
+            filenameInput.value = activeDocument.name;
+            renderDocumentTabs();
+            renderMarkdown();
+            scheduleWorkspacePersistence();
+            editor.focus();
+        }
+
+        function addDocument(document, activate = true) {
+            documents.push(document);
+            if (activate) {
+                activeDocumentId = document.id;
+                isSwitchingDocument = true;
+                editor.setValue(document.content);
+                isSwitchingDocument = false;
+                filenameInput.value = document.name;
+                renderMarkdown();
+            }
+            renderDocumentTabs();
+            scheduleWorkspacePersistence();
+        }
+
+        function closeDocument(documentId) {
+            const index = documents.findIndex(function(document) { return document.id === documentId; });
+            if (index < 0) return;
+            const wasActive = documentId === activeDocumentId;
+            documents.splice(index, 1);
+            if (!documents.length) documents.push(newDocument());
+            if (wasActive) {
+                const nextDocument = documents[Math.min(index, documents.length - 1)];
+                activeDocumentId = nextDocument.id;
+                isSwitchingDocument = true;
+                editor.setValue(nextDocument.content);
+                isSwitchingDocument = false;
+                filenameInput.value = nextDocument.name;
+                renderMarkdown();
+            }
+            renderDocumentTabs();
+            scheduleWorkspacePersistence();
         }
 
         // --- Toast notification system ---
@@ -519,12 +787,6 @@
             clearTimeout(renderTimeout);
             renderTimeout = setTimeout(renderMarkdown, 200);
         }
-
-        // Load remembered filename
-        if (localStorage.getItem('markdownFilename')) {
-            filenameInput.value = localStorage.getItem('markdownFilename');
-        }
-
 
         // Override marked renderer to add copy buttons to pre blocks
         const renderer = new marked.Renderer();
@@ -560,10 +822,14 @@
 
         // Render Markdown
         async function renderMarkdown() {
+            const generation = ++renderGeneration;
             const start = performance.now();
             const markdownText = editor.getValue();
-            localStorage.setItem('markdownInput', markdownText);
+            const activeDocument = getActiveDocument();
+            activeDocument.content = markdownText;
             updateFilenameFromTitle(markdownText);
+            renderDocumentTabs();
+            scheduleWorkspacePersistence();
             const htmlContent = marked.parse(markdownText);
             preview.innerHTML = DOMPurify.sanitize(htmlContent);
 
@@ -577,6 +843,8 @@
             } catch (error) {
                 console.error('Unable to render Mermaid diagram:', error);
             }
+
+            if (generation !== renderGeneration) return;
 
             updateCounts(markdownText);
             buildTOC();
@@ -627,17 +895,37 @@
             });
         }
 
-        // TOC toggle
+        function setTocOpen(open) {
+            tocPanel.hidden = !open;
+            tocPanel.classList.toggle('collapsed', !open);
+            tocToggle.setAttribute('aria-expanded', String(open));
+        }
         tocToggle.addEventListener('click', function() {
-            tocPanel.classList.toggle('collapsed');
+            setTocOpen(tocToggle.getAttribute('aria-expanded') !== 'true');
+        });
+        tocPanel.addEventListener('keydown', function(event) {
+            if (event.key === 'Escape') {
+                setTocOpen(false);
+                tocToggle.focus();
+            }
         });
 
         // Event listener for real-time rendering (debounced)
-        editor.onDidChangeModelContent(debounceRenderMarkdown);
+        editor.onDidChangeModelContent(function() {
+            if (!isSwitchingDocument) debounceRenderMarkdown();
+        });
 
-        // Copy HTML button
+        function getCleanPreviewClone() {
+            const clone = preview.cloneNode(true);
+            clone.removeAttribute('id');
+            clone.removeAttribute('aria-label');
+            clone.querySelectorAll('.pre-copy-btn').forEach(function(button) { button.remove(); });
+            return clone;
+        }
+
+        // Copy rendered content without editor controls
         copyBtn.addEventListener('click', function() {
-            navigator.clipboard.writeText(preview.innerHTML)
+            navigator.clipboard.writeText(getCleanPreviewClone().innerHTML)
                 .then(function() { showToast('HTML copied to clipboard'); })
                 .catch(function() { showToast('Copy failed'); });
         });
@@ -673,23 +961,34 @@
             globalThis.print();
         });
 
-        // Filename input
-        filenameInput.addEventListener('click', function() {
+        function beginFilenameEdit() {
             filenameInput.readOnly = false;
             filenameInput.focus();
-        });
-        filenameInput.addEventListener('blur', function() {
+            filenameInput.select();
+        }
+        function commitFilenameEdit() {
             filenameInput.readOnly = true;
-            filenameWasEdited = true;
-            localStorage.setItem('markdownFilenameCustom', 'true');
-            localStorage.setItem('markdownFilename', filenameInput.value);
-        });
+            const activeDocument = getActiveDocument();
+            activeDocument.name = filenameInput.value.trim() || 'document.md';
+            activeDocument.filenameCustom = true;
+            filenameInput.value = activeDocument.name;
+            renderDocumentTabs();
+            scheduleWorkspacePersistence();
+        }
+        filenameInput.addEventListener('click', beginFilenameEdit);
+        filenameInput.addEventListener('blur', commitFilenameEdit);
         filenameInput.addEventListener('keydown', function(e) {
+            if (filenameInput.readOnly && (e.key === 'Enter' || e.key === 'F2')) {
+                e.preventDefault();
+                beginFilenameEdit();
+                return;
+            }
             if (e.key === 'Enter') {
+                commitFilenameEdit();
+                saveBtn.focus();
+            } else if (e.key === 'Escape') {
+                filenameInput.value = getActiveDocument().name;
                 filenameInput.readOnly = true;
-                filenameWasEdited = true;
-                localStorage.setItem('markdownFilenameCustom', 'true');
-                localStorage.setItem('markdownFilename', filenameInput.value);
                 saveBtn.focus();
             }
         });
@@ -712,19 +1011,39 @@
             showToast('File saved: ' + filename);
         });
 
-        // Export rendered HTML as standalone file
-        exportHtmlBtn.addEventListener('click', function() {
-            const html = '<!DOCTYPE html>\n<html><head><meta charset="UTF-8"><title>Exported</title>\n' +
-                '<style>body{font-family:"Segoe UI",sans-serif;max-width:900px;margin:40px auto;padding:20px;line-height:1.6}' +
-                'pre{background:#f5f5f5;padding:16px;border-radius:6px;overflow-x:auto}' +
-                'code{font-family:monospace}table{border-collapse:collapse;width:100%}' +
-                'th,td{border:1px solid #ddd;padding:8px;text-align:left}th{background:#f0f0f0}' +
-                'blockquote{border-left:4px solid #ccc;margin:0;padding:4px 16px;background:#f9f9f9}</style>\n' +
-                '</head><body>' + preview.innerHTML + '</body></html>';
+        // Export clean rendered HTML with the active theme and syntax colors
+        exportHtmlBtn.addEventListener('click', async function() {
+            const previewStyle = getComputedStyle(preview);
+            const preStyle = getComputedStyle(preview.querySelector('pre') || preview);
+            const tableHeadingStyle = getComputedStyle(preview.querySelector('th') || preview);
+            const blockquoteStyle = getComputedStyle(preview.querySelector('blockquote') || preview);
+            let highlightCss = '';
+            try {
+                const response = await fetch(HIGHLIGHT_CSS_URL);
+                if (response.ok) highlightCss = await response.text();
+            } catch (error) {
+                console.warn('Unable to include syntax highlight styles in export:', error);
+            }
+            const title = getActiveDocument().name.replace(/\.md$/i, '');
+            const escapedTitle = title.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;');
+            const exportCss =
+                'body{font-family:"Segoe UI",Tahoma,sans-serif;max-width:900px;margin:40px auto;padding:20px;line-height:1.6;' +
+                'background:' + previewStyle.backgroundColor + ';color:' + previewStyle.color + '}' +
+                'pre{background:' + preStyle.backgroundColor + ';color:' + preStyle.color + ';padding:16px;border-radius:6px;overflow-x:auto}' +
+                'code{font-family:Consolas,Menlo,monospace}table{border-collapse:collapse;width:100%;margin-top:20px}' +
+                'th,td{padding:10px;text-align:left;border-bottom:1px solid ' + previewStyle.borderColor + '}' +
+                'th{background:' + tableHeadingStyle.backgroundColor + ';color:' + tableHeadingStyle.color + '}' +
+                'blockquote{border-left:5px solid ' + blockquoteStyle.borderLeftColor + ';margin:5px 0;padding:3px 12px;' +
+                'background:' + blockquoteStyle.backgroundColor + ';color:' + blockquoteStyle.color + '}' +
+                'img,svg{max-width:100%;height:auto}.mermaid{text-align:center;overflow-x:auto}' +
+                'input[type="checkbox"]{width:16px;height:16px;vertical-align:middle}';
+            const html = '<!DOCTYPE html>\n<html lang="en"><head><meta charset="UTF-8">' +
+                '<meta name="viewport" content="width=device-width,initial-scale=1"><title>' + escapedTitle + '</title>\n' +
+                '<style>' + highlightCss + exportCss + '</style>\n</head><body>' + getCleanPreviewClone().innerHTML + '</body></html>';
             const blob = new Blob([html], { type: 'text/html' });
             const a = document.createElement('a');
             a.href = URL.createObjectURL(blob);
-            a.download = (filenameInput.value.replace(/\.md$/, '') || 'document') + '.html';
+            a.download = (filenameInput.value.replace(/\.md$/i, '') || 'document') + '.html';
             document.body.appendChild(a);
             a.click();
             setTimeout(function() {
@@ -734,53 +1053,100 @@
             showToast('HTML exported');
         });
 
-        // Open .md file
+        newDocumentBtn.addEventListener('click', function() { addDocument(newDocument()); });
+        documentTabs.addEventListener('keydown', function(event) {
+            if (!event.target.classList.contains('document-tab-select')) return;
+            const tabs = Array.from(documentTabs.querySelectorAll('.document-tab-select'));
+            const currentIndex = tabs.indexOf(event.target);
+            let nextIndex;
+            if (event.key === 'ArrowLeft') nextIndex = (currentIndex - 1 + tabs.length) % tabs.length;
+            if (event.key === 'ArrowRight') nextIndex = (currentIndex + 1) % tabs.length;
+            if (event.key === 'Home') nextIndex = 0;
+            if (event.key === 'End') nextIndex = tabs.length - 1;
+            if (event.key === 'Delete') {
+                event.preventDefault();
+                closeDocument(documents[currentIndex].id);
+                documentTabs.querySelector('[aria-selected="true"]').focus();
+                return;
+            }
+            if (nextIndex !== undefined) {
+                event.preventDefault();
+                activateDocument(documents[nextIndex].id);
+                documentTabs.querySelector('[aria-selected="true"]').focus();
+            }
+        });
+
+        // Open one or more Markdown files
         openBtn.addEventListener('click', function() { openFileInput.click(); });
-        openFileInput.addEventListener('change', function() {
-            const file = openFileInput.files[0];
-            if (!file) return;
-            file.text().then(function(text) {
-                editor.setValue(text);
-                filenameInput.value = file.name;
-                filenameWasEdited = true;
-                localStorage.setItem('markdownFilenameCustom', 'true');
-                localStorage.setItem('markdownFilename', file.name);
-                renderMarkdown();
-                showToast('Opened: ' + file.name);
+        openFileInput.addEventListener('change', async function() {
+            const files = Array.from(openFileInput.files || []);
+            if (!files.length) return;
+            const openedDocuments = await Promise.all(files.map(async function(file) {
+                return newDocument(file.name, await file.text(), true);
+            }));
+            openedDocuments.forEach(function(document, index) {
+                addDocument(document, index === openedDocuments.length - 1);
             });
             openFileInput.value = '';
+            showToast('Opened ' + files.length + (files.length === 1 ? ' file' : ' files'));
         });
 
         // Zen mode
-        zenBtn.addEventListener('click', function() {
-            document.body.classList.toggle('zen-mode');
-            zenBtn.textContent = document.body.classList.contains('zen-mode') ? 'Exit Zen' : 'Zen';
-        });
+        function setZenMode(enabled) {
+            document.body.classList.toggle('zen-mode', enabled);
+            zenBtn.setAttribute('aria-pressed', String(enabled));
+            if (enabled) {
+                zenExitBtn.focus();
+            } else {
+                zenBtn.focus();
+            }
+            editor.layout();
+        }
+        zenBtn.addEventListener('click', function() { setZenMode(true); });
+        zenExitBtn.addEventListener('click', function() { setZenMode(false); });
 
         // --- Split pane resizer ---
         let isResizing = false;
-        resizer.addEventListener('mousedown', function(e) {
+        function setSplitPercentage(percentage) {
+            const constrainedPercentage = Math.min(Math.max(percentage, 15), 85);
+            const inputWrapper = editorContainer.closest('.input-wrapper');
+            inputWrapper.style.flex = '0 0 ' + constrainedPercentage + '%';
+            preview.style.flex = '0 0 ' + (100 - constrainedPercentage - 0.5) + '%';
+            resizer.setAttribute('aria-valuenow', String(Math.round(constrainedPercentage)));
+            editor.layout();
+        }
+        resizer.addEventListener('pointerdown', function(e) {
             isResizing = true;
             document.body.style.cursor = 'col-resize';
             document.body.style.userSelect = 'none';
+            resizer.setPointerCapture(e.pointerId);
             e.preventDefault();
         });
-        document.addEventListener('mousemove', function(e) {
+        resizer.addEventListener('pointermove', function(e) {
             if (!isResizing) return;
             const container = document.querySelector('.main-content');
             const rect = container.getBoundingClientRect();
             const offset = e.clientX - rect.left;
-            const pct = Math.min(Math.max((offset / rect.width) * 100, 15), 85);
-            const inputWrapper = editorContainer.closest('.input-wrapper');
-            inputWrapper.style.flex = '0 0 ' + pct + '%';
-            preview.style.flex = '0 0 ' + (100 - pct - 0.5) + '%';
-            editor.layout();
+            setSplitPercentage((offset / rect.width) * 100);
         });
-        document.addEventListener('mouseup', function() {
+        resizer.addEventListener('pointerup', function(e) {
             if (isResizing) {
                 isResizing = false;
                 document.body.style.cursor = '';
                 document.body.style.userSelect = '';
+                resizer.releasePointerCapture(e.pointerId);
+            }
+        });
+        resizer.addEventListener('keydown', function(event) {
+            const currentPercentage = Number(resizer.getAttribute('aria-valuenow'));
+            let nextPercentage;
+            if (event.key === 'ArrowLeft') nextPercentage = currentPercentage - 5;
+            if (event.key === 'ArrowRight') nextPercentage = currentPercentage + 5;
+            if (event.key === 'Home') nextPercentage = 15;
+            if (event.key === 'End') nextPercentage = 85;
+            if (nextPercentage !== undefined) {
+                event.preventDefault();
+                setSplitPercentage(nextPercentage);
             }
         });
 
@@ -837,10 +1203,17 @@
 
         // --- Keyboard shortcuts (Monaco owns find/replace, undo/redo, tab indent by default) ---
         const shortcutMap = {
+            'n': function() { newDocumentBtn.click(); },
+            'o': function() { openBtn.click(); },
             's': function() { saveBtn.click(); },
             'p': function() { printBtn.click(); }
         };
         document.addEventListener('keydown', function(e) {
+            if (e.key === 'Escape' && document.body.classList.contains('zen-mode')) {
+                e.preventDefault();
+                setZenMode(false);
+                return;
+            }
             if (!e.ctrlKey) return;
             if (e.shiftKey && e.key === 'C') {
                 e.preventDefault();
@@ -855,8 +1228,14 @@
         });
 
         // --- Hide loading overlay once ready ---
+        filenameInput.value = getActiveDocument().name;
+        renderDocumentTabs();
         loadingOverlay.style.display = 'none';
+    }, function(error) {
+        console.error('Unable to load Monaco editor:', error);
+        showStartupError('Unable to load the editor. Check your connection and reload.');
     });
+    }
     </script>
 
 </body>
