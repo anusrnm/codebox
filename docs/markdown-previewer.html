@@ -99,6 +99,7 @@
             --heading-h2: inherit;
             --para-fg: inherit;
             --li-fg: inherit;
+            --preview-link-color: #0969da;
             --focus-ring: 2px solid #4CAF50;
             --preview-body-font: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
             --preview-heading-font: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
@@ -122,6 +123,7 @@
             --select-bg: #222; --select-fg: #eee; --select-border: #45a049;
             --filename-fg: #eee; --filename-focus-bg: #222; --filename-focus-border: #45a049;
             --heading-h1: #eee; --heading-h2: #ccc; --para-fg: #bbb; --li-fg: #ccc;
+            --preview-link-color: #79c0ff;
         }
 
         .theme-solarized {
@@ -136,6 +138,7 @@
             --select-bg: #eee8d5; --select-fg: #586e75; --select-border: #b58900;
             --filename-fg: #586e75; --filename-focus-bg: #eee8d5; --filename-focus-border: #b58900;
             --heading-h1: #586e75; --heading-h2: #586e75; --para-fg: #586e75; --li-fg: #586e75;
+            --preview-link-color: #0969da;
         }
 
         .theme-high-contrast {
@@ -150,6 +153,7 @@
             --select-bg: #000; --select-fg: #fff; --select-border: #fff;
             --filename-fg: #fff; --filename-focus-bg: #000; --filename-focus-border: #fff;
             --heading-h1: #fff; --heading-h2: #fff; --para-fg: #fff; --li-fg: #fff;
+            --preview-link-color: #79c0ff;
         }
 
         /* --- Base --- */
@@ -244,6 +248,7 @@
         #preview h2 { color: var(--heading-h2); }
         #preview p { color: var(--para-fg); margin-top: var(--preview-paragraph-spacing); margin-bottom: var(--preview-paragraph-spacing); }
         #preview li { color: var(--li-fg); }
+        #preview a, #preview a:visited { color: var(--preview-link-color); }
         #preview blockquote {
             background-color: var(--blockquote-bg); border-left: 5px solid var(--blockquote-border);
             color: var(--blockquote-fg); padding: 3px 12px; margin: 5px 0;
@@ -340,9 +345,21 @@
         .appearance-field label { display: flex; justify-content: space-between; gap: 8px; }
         .appearance-field output { color: var(--blockquote-fg); font-weight: normal; }
         .appearance-field-wide { grid-column: 1 / -1; }
-        .appearance-toggles { display: flex; flex-wrap: wrap; gap: 16px; margin-top: 16px; }
-        .appearance-toggles label { display: inline-flex; align-items: center; gap: 7px; margin: 0; font-weight: normal; }
-        .appearance-toggles input { width: auto; }
+        .appearance-toggles { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px 16px; margin-top: 16px; }
+        .appearance-toggles label {
+            display: flex; align-items: center; gap: 8px; min-height: 34px; margin: 0;
+            padding: 0 8px; border: 1px solid var(--preview-border); border-radius: 4px; font-weight: normal;
+        }
+        .appearance-toggles input { width: 16px !important; height: 16px; margin: 0; flex: 0 0 auto; }
+        .history-list { display: grid; gap: 8px; max-height: 48vh; overflow-y: auto; margin-top: 14px; }
+        .history-entry {
+            display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 10px; align-items: center;
+            padding: 10px; border: 1px solid var(--preview-border); border-radius: 4px;
+        }
+        .history-entry strong, .history-entry small { display: block; }
+        .history-entry small { margin-top: 3px; color: var(--blockquote-fg); }
+        .history-entry button { padding: 6px 10px; }
+        .history-empty { color: var(--blockquote-fg); margin: 14px 0; }
 
         /* --- Toolbar --- */
         .toolbar {
@@ -426,6 +443,7 @@
             background: var(--preview-bg); border-color: var(--preview-border);
             box-shadow: inset 0 3px 0 var(--accent);
         }
+        .document-tab-select.is-dirty::before { content: '•'; color: var(--accent); margin-right: 5px; }
         .document-tab-close {
             padding: 8px; border-radius: 0 4px 0 0; background: var(--th-bg);
             color: var(--fg); font-size: 16px; line-height: 1;
@@ -499,6 +517,7 @@
         .toc-level-h4 { padding-left: 36px !important; }
         .toc-level-h5 { padding-left: 48px !important; }
         .toc-level-h6 { padding-left: 60px !important; }
+        .app-version { margin-left: 6px; color: var(--blockquote-fg); font-size: 12px; white-space: nowrap; }
 
         /* --- Toast --- */
         #toast-container {
@@ -559,6 +578,7 @@
             .template-grid { grid-template-columns: 1fr; }
             .appearance-grid { grid-template-columns: 1fr; }
             .appearance-field-wide { grid-column: auto; }
+            .appearance-toggles { grid-template-columns: 1fr; }
             /* Hamburger: collapse toolbar into wrap */
         }
 
@@ -612,6 +632,7 @@
                 page-break-before: avoid !important; page-break-inside: avoid !important;
             }
             #preview * { page-break-after: auto; page-break-inside: avoid; }
+            #preview [data-source-line], #preview [data-source-line]:hover { outline: none !important; }
             .pre-copy-btn { display: none !important; }
         }
 
@@ -670,6 +691,7 @@
             <summary title="More tools and settings" aria-label="More tools and settings"><i data-lucide="ellipsis"></i></summary>
             <div class="overflow-menu" role="group" aria-label="More tools and settings">
                 <button id="plantuml-settings-btn" type="button"><i data-lucide="workflow"></i>PlantUML server</button>
+                <button id="history-btn" type="button"><i data-lucide="history"></i>Document history</button>
                 <button id="shortcuts-btn" type="button"><i data-lucide="keyboard"></i>Keyboard shortcuts</button>
                 <button id="appearance-btn" type="button"><i data-lucide="palette"></i>Preview appearance</button>
                 <div class="overflow-settings">
@@ -766,6 +788,25 @@
         </div>
     </dialog>
 
+    <dialog id="history-dialog" class="settings-dialog" aria-labelledby="history-title">
+        <h2 id="history-title">Document history</h2>
+        <p>Automatic snapshots are created after editing pauses. Restoring replaces the current workspace.</p>
+        <div class="settings-actions">
+            <button id="create-restore-point-btn" class="secondary" type="button">Create restore point</button>
+        </div>
+        <div id="history-list" class="history-list" aria-live="polite"></div>
+        <div class="settings-actions"><button type="button" data-close-dialog>Done</button></div>
+    </dialog>
+
+    <dialog id="close-document-dialog" class="settings-dialog" aria-labelledby="close-document-title">
+        <h2 id="close-document-title">Discard unsaved changes?</h2>
+        <p id="close-document-message"></p>
+        <div class="settings-actions">
+            <button id="close-document-cancel-btn" class="secondary" type="button">Keep editing</button>
+            <button id="close-document-confirm-btn" type="button">Discard changes</button>
+        </div>
+    </dialog>
+
     <dialog id="shortcuts-dialog" class="settings-dialog" aria-labelledby="shortcuts-title">
         <h2 id="shortcuts-title">Keyboard shortcuts</h2>
         <table class="shortcut-table">
@@ -777,6 +818,7 @@
                 <tr><td>Export PDF</td><td><kbd>Ctrl</kbd> + <kbd>P</kbd></td></tr>
                 <tr><td>Copy HTML</td><td><kbd>Ctrl</kbd> + <kbd>Shift</kbd> + <kbd>C</kbd></td></tr>
                 <tr><td>Shortcut help</td><td><kbd>Ctrl</kbd> + <kbd>Shift</kbd> + <kbd>/</kbd></td></tr>
+                <tr><td>Toggle table of contents</td><td><kbd>Ctrl</kbd> + <kbd>Alt</kbd> + <kbd>T</kbd></td></tr>
                 <tr><td>Find / replace</td><td><kbd>Ctrl</kbd> + <kbd>F</kbd> / <kbd>Ctrl</kbd> + <kbd>H</kbd></td></tr>
                 <tr><td>Undo / redo</td><td><kbd>Ctrl</kbd> + <kbd>Z</kbd> / <kbd>Ctrl</kbd> + <kbd>Y</kbd></td></tr>
                 <tr><td>Switch document tabs</td><td><kbd>Left</kbd> / <kbd>Right</kbd></td></tr>
@@ -857,6 +899,10 @@
                     </select>
                 </div>
                 <div class="appearance-field">
+                    <label for="appearance-link-color">Link color</label>
+                    <input id="appearance-link-color" type="color" value="#0969da">
+                </div>
+                <div class="appearance-field">
                     <label for="appearance-body-size">Body size <output id="appearance-body-size-value">16px</output></label>
                     <input id="appearance-body-size" type="range" min="12" max="24" step="1" value="16">
                 </div>
@@ -888,6 +934,7 @@
     <div class="document-bar">
         <div id="document-tabs" role="tablist" aria-label="Open documents"></div>
         <button id="new-document-btn" title="New document (Ctrl+N)" aria-label="New document"><i data-lucide="plus"></i></button>
+        <span class="app-version" aria-label="Application version">v2.0.0</span>
         <div id="layout-switcher" class="layout-switcher" role="group" aria-label="Workspace layout">
             <button type="button" data-layout="editor" aria-pressed="false">Editor</button>
             <button type="button" data-layout="split" aria-pressed="true">Split</button>
@@ -957,6 +1004,14 @@
         const workspaceFileInput = document.getElementById('workspace-file-input');
         const workspaceImportBtn = document.getElementById('workspace-import-btn');
         const workspaceExportBtn = document.getElementById('workspace-export-btn');
+        const historyBtn = document.getElementById('history-btn');
+        const historyDialog = document.getElementById('history-dialog');
+        const historyList = document.getElementById('history-list');
+        const createRestorePointBtn = document.getElementById('create-restore-point-btn');
+        const closeDocumentDialog = document.getElementById('close-document-dialog');
+        const closeDocumentMessage = document.getElementById('close-document-message');
+        const closeDocumentCancelBtn = document.getElementById('close-document-cancel-btn');
+        const closeDocumentConfirmBtn = document.getElementById('close-document-confirm-btn');
         const exportHtmlBtn = document.getElementById('export-html-btn');
         const openBtn = document.getElementById('open-btn');
         const openFileInput = document.getElementById('open-file-input');
@@ -988,6 +1043,7 @@
         const appearanceHeadingFont = document.getElementById('appearance-heading-font');
         const appearanceCodeFont = document.getElementById('appearance-code-font');
         const appearanceWidth = document.getElementById('appearance-width');
+        const appearanceLinkColor = document.getElementById('appearance-link-color');
         const appearanceBodySize = document.getElementById('appearance-body-size');
         const appearanceCodeSize = document.getElementById('appearance-code-size');
         const appearanceLineHeight = document.getElementById('appearance-line-height');
@@ -1002,11 +1058,14 @@
         const plantUmlServerError = document.getElementById('plantuml-server-error');
         const plantUmlResetBtn = document.getElementById('plantuml-reset-btn');
         const DB_NAME = 'markdown-previewer';
-        const DB_VERSION = 1;
+        const DB_VERSION = 2;
         let documents = [];
         let activeDocumentId;
         let persistenceWarningShown = false;
         let persistTimeout;
+        let snapshotTimeout;
+        let lastSnapshotSignature = '';
+        let pendingCloseDocumentId = null;
         let isSwitchingDocument = false;
         let renderGeneration = 0;
         let diagnostics = [];
@@ -1154,6 +1213,7 @@
                 bodySize: parseInt(preset.bodySize, 10), codeSize: parseInt(preset.codeSize, 10),
                 lineHeight: presetName === 'editorial' ? 1.75 : presetName === 'technical' ? 1.45 : 1.6,
                 width: presetName === 'technical' ? '1000px' : '800px',
+                linkColor: '',
                 paragraphSpacing: presetName === 'technical' ? 10 : 16,
                 codeWrap: false, compactTables: presetName === 'technical'
             };
@@ -1172,6 +1232,7 @@
                 codeSize: Math.min(20, Math.max(10, Number(settings.codeSize) || fallback.codeSize)),
                 lineHeight: Math.min(2.2, Math.max(1.2, Number(settings.lineHeight) || fallback.lineHeight)),
                 width: allowedWidths.includes(settings.width) ? settings.width : fallback.width,
+                linkColor: /^#[0-9a-f]{6}$/i.test(settings.linkColor || '') ? settings.linkColor : '',
                 paragraphSpacing: Math.min(32, Math.max(4, Number(settings.paragraphSpacing) || fallback.paragraphSpacing)),
                 codeWrap: Boolean(settings.codeWrap), compactTables: Boolean(settings.compactTables)
             };
@@ -1206,6 +1267,8 @@
             document.documentElement.style.setProperty('--preview-code-font-size', currentAppearance.codeSize + 'px');
             document.documentElement.style.setProperty('--preview-line-height', currentAppearance.lineHeight);
             document.documentElement.style.setProperty('--preview-content-width', currentAppearance.width);
+            if (currentAppearance.linkColor) preview.style.setProperty('--preview-link-color', currentAppearance.linkColor);
+            else preview.style.removeProperty('--preview-link-color');
             document.documentElement.style.setProperty('--preview-paragraph-spacing', currentAppearance.paragraphSpacing + 'px');
             preview.classList.toggle('appearance-code-wrap', currentAppearance.codeWrap);
             preview.classList.toggle('appearance-compact-tables', currentAppearance.compactTables);
@@ -1222,6 +1285,7 @@
             appearanceHeadingFont.value = currentAppearance.headingFont;
             appearanceCodeFont.value = currentAppearance.codeFont;
             appearanceWidth.value = currentAppearance.width;
+            appearanceLinkColor.value = currentAppearance.linkColor || getComputedStyle(preview).getPropertyValue('--preview-link-color').trim();
             appearanceBodySize.value = currentAppearance.bodySize;
             appearanceCodeSize.value = currentAppearance.codeSize;
             appearanceLineHeight.value = currentAppearance.lineHeight;
@@ -1239,6 +1303,7 @@
                 preset: appearancePreset.value,
                 bodyFont: appearanceBodyFont.value, headingFont: appearanceHeadingFont.value,
                 codeFont: appearanceCodeFont.value, width: appearanceWidth.value,
+                linkColor: appearanceLinkColor.value,
                 bodySize: appearanceBodySize.value, codeSize: appearanceCodeSize.value,
                 lineHeight: appearanceLineHeight.value, paragraphSpacing: appearanceParagraphSpacing.value,
                 codeWrap: appearanceCodeWrap.checked, compactTables: appearanceCompactTables.checked
@@ -1266,6 +1331,7 @@
                 id: globalThis.crypto && crypto.randomUUID ? crypto.randomUUID() : Date.now() + '-' + Math.random(),
                 name: name,
                 content: content,
+                savedContent: content,
                 filenameCustom: filenameCustom
             };
         }
@@ -1278,7 +1344,12 @@
                 }
                 const request = indexedDB.open(DB_NAME, DB_VERSION);
                 request.onupgradeneeded = function() {
-                    request.result.createObjectStore('workspace', { keyPath: 'id' });
+                    if (!request.result.objectStoreNames.contains('workspace')) {
+                        request.result.createObjectStore('workspace', { keyPath: 'id' });
+                    }
+                    if (!request.result.objectStoreNames.contains('snapshots')) {
+                        request.result.createObjectStore('snapshots', { keyPath: 'id' });
+                    }
                 };
                 request.onsuccess = function() { resolve(request.result); };
                 request.onerror = function() { reject(request.error); };
@@ -1345,15 +1416,143 @@
         function scheduleWorkspacePersistence() {
             clearTimeout(persistTimeout);
             persistTimeout = setTimeout(persistWorkspace, 300);
+            scheduleAutomaticSnapshot();
+        }
+
+        function snapshotSignature(snapshot) {
+            return JSON.stringify({
+                activeDocumentId: snapshot.activeDocumentId,
+                documents: snapshot.documents.map(function(document) {
+                    return [document.id, document.name, document.content, document.filenameCustom];
+                })
+            });
+        }
+
+        function createWorkspaceSnapshot(label) {
+            const activeDocument = getActiveDocument();
+            if (activeDocument) activeDocument.content = editor.getValue();
+            return {
+                id: (globalThis.crypto && crypto.randomUUID ? crypto.randomUUID() : Date.now() + '-' + Math.random()),
+                label: label,
+                createdAt: Date.now(),
+                activeDocumentId: activeDocumentId,
+                documents: documents.map(function(document) { return { ...document }; })
+            };
+        }
+
+        async function saveSnapshot(label, force = false) {
+            const snapshot = createWorkspaceSnapshot(label);
+            const signature = snapshotSignature(snapshot);
+            if (!force && signature === lastSnapshotSignature) return false;
+            try {
+                const database = await openWorkspaceDatabase();
+                await new Promise(function(resolve, reject) {
+                    const transaction = database.transaction('snapshots', 'readwrite');
+                    const store = transaction.objectStore('snapshots');
+                    const request = store.getAll();
+                    request.onsuccess = function() {
+                        const snapshots = request.result.sort(function(a, b) { return b.createdAt - a.createdAt; });
+                        snapshots.slice(29).forEach(function(oldSnapshot) { store.delete(oldSnapshot.id); });
+                        store.put(snapshot);
+                    };
+                    request.onerror = function() { reject(request.error); };
+                    transaction.oncomplete = resolve;
+                    transaction.onerror = function() { reject(transaction.error); };
+                });
+                database.close();
+                lastSnapshotSignature = signature;
+                return true;
+            } catch (error) {
+                console.warn('Unable to create workspace snapshot:', error);
+                return false;
+            }
+        }
+
+        function scheduleAutomaticSnapshot() {
+            clearTimeout(snapshotTimeout);
+            snapshotTimeout = setTimeout(function() { saveSnapshot('Automatic'); }, 12000);
+        }
+
+        async function getSnapshots() {
+            try {
+                const database = await openWorkspaceDatabase();
+                const snapshots = await new Promise(function(resolve, reject) {
+                    const transaction = database.transaction('snapshots', 'readonly');
+                    const request = transaction.objectStore('snapshots').getAll();
+                    request.onsuccess = function() { resolve(request.result); };
+                    request.onerror = function() { reject(request.error); };
+                });
+                database.close();
+                return snapshots.sort(function(a, b) { return b.createdAt - a.createdAt; });
+            } catch (error) {
+                console.warn('Unable to load workspace snapshots:', error);
+                return [];
+            }
+        }
+
+        async function restoreSnapshot(snapshot) {
+            documents = snapshot.documents.map(function(document) {
+                return { ...document, savedContent: document.content };
+            });
+            activeDocumentId = documents.some(function(document) { return document.id === snapshot.activeDocumentId; })
+                ? snapshot.activeDocumentId : documents[0].id;
+            const activeDocument = getActiveDocument();
+            isSwitchingDocument = true;
+            editor.setValue(activeDocument.content);
+            isSwitchingDocument = false;
+            filenameInput.value = activeDocument.name;
+            renderDocumentTabs();
+            renderMarkdown();
+            await persistWorkspace();
+            lastSnapshotSignature = snapshotSignature(createWorkspaceSnapshot('Automatic'));
+        }
+
+        async function renderHistory() {
+            const snapshots = await getSnapshots();
+            historyList.replaceChildren();
+            if (!snapshots.length) {
+                const empty = document.createElement('p');
+                empty.className = 'history-empty';
+                empty.textContent = 'No restore points yet.';
+                historyList.appendChild(empty);
+                return;
+            }
+            snapshots.forEach(function(snapshot) {
+                const entry = document.createElement('div');
+                entry.className = 'history-entry';
+                const details = document.createElement('div');
+                const name = document.createElement('strong');
+                const time = document.createElement('small');
+                name.textContent = snapshot.label;
+                time.textContent = new Date(snapshot.createdAt).toLocaleString() + ' · ' + snapshot.documents.length + ' document' + (snapshot.documents.length === 1 ? '' : 's');
+                details.append(name, time);
+                const restoreButton = document.createElement('button');
+                restoreButton.type = 'button';
+                restoreButton.textContent = 'Restore';
+                restoreButton.addEventListener('click', async function() {
+                    if (!globalThis.confirm('Restore this snapshot? Current workspace changes will be replaced.')) return;
+                    await restoreSnapshot(snapshot);
+                    historyDialog.close();
+                    showToast('Workspace restored from history');
+                });
+                entry.append(details, restoreButton);
+                historyList.appendChild(entry);
+            });
         }
 
         const initialWorkspace = await loadWorkspace();
-        documents = initialWorkspace.documents;
+        documents = initialWorkspace.documents.map(function(document) {
+            return { ...document, savedContent: typeof document.savedContent === 'string' ? document.savedContent : document.content };
+        });
         activeDocumentId = documents.some(function(document) { return document.id === initialWorkspace.activeDocumentId; })
             ? initialWorkspace.activeDocumentId : documents[0].id;
 
         function getActiveDocument() {
             return documents.find(function(document) { return document.id === activeDocumentId; });
+        }
+
+        function isDocumentDirty(document) {
+            return document.content !== document.savedContent;
         }
 
         // Monaco theme mirroring the app's own theme switcher (kept per requirements)
@@ -1455,6 +1654,8 @@
                 selectButton.role = 'tab';
                 selectButton.title = openDocument.name;
                 selectButton.textContent = openDocument.name;
+                selectButton.classList.toggle('is-dirty', isDocumentDirty(openDocument));
+                if (isDocumentDirty(openDocument)) selectButton.setAttribute('aria-label', openDocument.name + ', unsaved changes');
                 selectButton.setAttribute('aria-selected', String(openDocument.id === activeDocumentId));
                 selectButton.tabIndex = openDocument.id === activeDocumentId ? 0 : -1;
                 selectButton.addEventListener('click', function() { activateDocument(openDocument.id); });
@@ -1501,9 +1702,17 @@
             scheduleWorkspacePersistence();
         }
 
-        function closeDocument(documentId) {
+        function closeDocument(documentId, discardChanges = false) {
             const index = documents.findIndex(function(document) { return document.id === documentId; });
             if (index < 0) return;
+            if (documentId === activeDocumentId) getActiveDocument().content = editor.getValue();
+            const documentToClose = documents[index];
+            if (!discardChanges && isDocumentDirty(documentToClose)) {
+                pendingCloseDocumentId = documentId;
+                closeDocumentMessage.textContent = '“' + documentToClose.name + '” has unsaved changes.';
+                closeDocumentDialog.showModal();
+                return;
+            }
             const wasActive = documentId === activeDocumentId;
             documents.splice(index, 1);
             if (!documents.length) documents.push(newDocument());
@@ -1519,6 +1728,17 @@
             renderDocumentTabs();
             scheduleWorkspacePersistence();
         }
+
+        closeDocumentCancelBtn.addEventListener('click', function() {
+            pendingCloseDocumentId = null;
+            closeDocumentDialog.close();
+        });
+        closeDocumentConfirmBtn.addEventListener('click', function() {
+            const documentId = pendingCloseDocumentId;
+            pendingCloseDocumentId = null;
+            closeDocumentDialog.close();
+            if (documentId) closeDocument(documentId, true);
+        });
 
         // --- Toast notification system ---
         function showToast(message, duration = 2000) {
@@ -1862,16 +2082,16 @@
         tocToggle.addEventListener('click', function() {
             setTocOpen(tocToggle.getAttribute('aria-expanded') !== 'true');
         });
-        tocPanel.addEventListener('keydown', function(event) {
-            if (event.key === 'Escape') {
-                setTocOpen(false);
-                tocToggle.focus();
-            }
-        });
 
         // Event listener for real-time rendering (debounced)
         editor.onDidChangeModelContent(function() {
-            if (!isSwitchingDocument) debounceRenderMarkdown();
+            if (!isSwitchingDocument) {
+                const activeDocument = getActiveDocument();
+                const wasDirty = isDocumentDirty(activeDocument);
+                activeDocument.content = editor.getValue();
+                if (wasDirty !== isDocumentDirty(activeDocument)) renderDocumentTabs();
+                debounceRenderMarkdown();
+            }
         });
 
         function getCleanPreviewClone() {
@@ -2092,6 +2312,11 @@
                 a.remove();
                 URL.revokeObjectURL(a.href);
             }, 100);
+            const activeDocument = getActiveDocument();
+            activeDocument.content = editor.getValue();
+            activeDocument.savedContent = activeDocument.content;
+            renderDocumentTabs();
+            scheduleWorkspacePersistence();
             showToast('File saved: ' + filename);
         });
 
@@ -2142,6 +2367,7 @@
                         id: typeof document.id === 'string' ? document.id : newDocument().id,
                         name: document.name || 'document.md',
                         content: document.content,
+                        savedContent: typeof document.savedContent === 'string' ? document.savedContent : document.content,
                         filenameCustom: Boolean(document.filenameCustom)
                     };
                 });
@@ -2162,6 +2388,23 @@
                 workspaceError.hidden = false;
             } finally {
                 workspaceFileInput.value = '';
+            }
+        });
+
+        historyBtn.addEventListener('click', async function() {
+            toolbarOverflow.open = false;
+            await renderHistory();
+            historyDialog.showModal();
+        });
+        historyDialog.querySelector('[data-close-dialog]').addEventListener('click', function() {
+            historyDialog.close();
+        });
+        createRestorePointBtn.addEventListener('click', async function() {
+            if (await saveSnapshot('Restore point', true)) {
+                await renderHistory();
+                showToast('Restore point created');
+            } else {
+                showToast('Unable to create restore point');
             }
         });
 
@@ -2196,6 +2439,7 @@
             const exportCss =
                 'body{font-family:' + previewStyle.fontFamily + ';font-size:' + previewStyle.fontSize + ';max-width:' + exportMaxWidth + ';margin:40px auto;padding:20px;line-height:' + currentAppearance.lineHeight + ';' +
                 'background:' + previewStyle.backgroundColor + ';color:' + previewStyle.color + '}' +
+                'a,a:visited{color:' + getComputedStyle(preview).getPropertyValue('--preview-link-color').trim() + '}' +
                 'h1,h2,h3,h4,h5,h6{font-family:' + headingStyle.fontFamily + '}' +
                 'p{margin-top:' + paragraphStyle.marginTop + ';margin-bottom:' + paragraphStyle.marginBottom + '}' +
                 'pre{font-family:' + exportCodeFamily + ';font-size:' + currentAppearance.codeSize + 'px;background:' + preStyle.backgroundColor + ';color:' + preStyle.color + ';padding:16px;border-radius:6px;overflow-x:auto;white-space:' + codeWhiteSpace + ';word-break:' + (currentAppearance.codeWrap ? 'break-word' : 'normal') + '}' +
@@ -2422,6 +2666,13 @@
             if (toolbarOverflow.open && !toolbarOverflow.contains(event.target)) toolbarOverflow.open = false;
         });
         document.addEventListener('keydown', function(e) {
+            const modalOpen = Boolean(document.querySelector('dialog[open]'));
+            if (!modalOpen && e.key === 'Escape' && tocToggle.getAttribute('aria-expanded') === 'true') {
+                e.preventDefault();
+                setTocOpen(false);
+                tocToggle.focus();
+                return;
+            }
             if (e.key === 'Escape' && toolbarOverflow.open) {
                 toolbarOverflow.open = false;
                 toolbarOverflow.querySelector('summary').focus();
@@ -2436,6 +2687,11 @@
             if (e.shiftKey && e.code === 'Slash') {
                 e.preventDefault();
                 showShortcutHelp();
+                return;
+            }
+            if (!modalOpen && e.altKey && e.code === 'KeyT') {
+                e.preventDefault();
+                tocToggle.click();
                 return;
             }
             if (e.shiftKey && e.key === 'C') {
