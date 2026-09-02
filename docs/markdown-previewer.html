@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Markdown to HTML & PDF Export</title>
+    <title>Markdown & LaTeX Editor</title>
     <link
     href="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAABmJLR0QA/wD/AP+gvaeTAAABnklEQVQ4jY2TvUtjURDFf3M1Xy6yYKU26vonRNBo3tqIoha6WKyV21qk8G8QBLET7bZRcMEsKBaCxkqMMT7dKq34EVi23jbRvNnC96J5ubKe7t4558zMvTNCCKoIeYYxTAA9/vUDhhwpiiLoa740iAukUDaAZNjYxy+UjDi4TQZaYB5lC4i9IQ5QAb5JmmzdwM98CkT/I34xUUbFwTWqiF92FMDzYH0vTr7U2qD4fhjjyI0ExxjCpipiKDDyumdPYfVHgpWdRF1887uF5e0Ee2cNBQ5QJGWA8XB98ajy8YNy98cAsJ+PMjX02NyIx4RB6LU1+cWpcnD+nPHkOsJY0mIAPQZt/NcA00OPHLkRSrctfOqq0Ra30tQAZVukvU3p7FDWdhPMOlUbBZSywSNnj8KsUyVfamUs+WQnCMcGhwvg0haf+1ylnP1LLGIpX7liBNeIoChL/oRhBBZnKk38/m6PycH6Q1YwZETQl1E+5yuw/c5RXpA0PwFMvZ00WZRR4PpNqXKF4ARiwttIsM5FUtQYR+jzhfcYcgxzGV7nf+vtg1qvRt6KAAAAAElFTkSuQmCC"
     rel="icon" type="image/x-icon" />
@@ -43,6 +43,10 @@
         onerror="showStartupError('Unable to load KaTeX. Check your connection and reload.')"></script>
     <script src="https://cdn.jsdelivr.net/npm/marked-katex-extension@5.1.12/lib/index.umd.js"
         onerror="showStartupError('Unable to load math support. Check your connection and reload.')"></script>
+
+    <!-- LaTeX.js must load before Monaco's AMD loader so it exposes window.latexjs. -->
+    <script src="https://cdn.jsdelivr.net/npm/latex.js@0.12.6/dist/latex.js"
+        onerror="showStartupError('Unable to load the LaTeX parser. Check your connection and reload.')"></script>
 
     <!-- Highlight.js CDN (pinned, single bundle) -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.11.1/styles/default.min.css"
@@ -287,6 +291,44 @@
         #preview .markdown-alert-caution .markdown-alert-title { color: #cf222e; }
         #preview .footnotes { margin-top: 32px; border-top: 1px solid var(--row-border); font-size: 0.92em; }
         #preview .katex-display { overflow-x: auto; overflow-y: hidden; padding: 4px 0; }
+        #preview.latex-mode {
+            padding: 0; background: #e9e8e4; color: #161616;
+        }
+        #preview .latex-document {
+            width: min(100%, 210mm); min-height: 297mm; max-width: 210mm;
+            padding: clamp(32px, 8%, 64px) clamp(28px, 9%, 72px) !important;
+            box-sizing: border-box; background: #fff; color: #161616;
+            box-shadow: 0 2px 12px rgba(0,0,0,0.14);
+            font-family: "Computer Modern Serif", serif;
+            font-size: 11pt; line-height: 1.2; text-align: justify;
+            --paperwidth: 100%; --textwidth: 100%; --marginleftwidth: 0px; --marginrightwidth: 0px;
+        }
+        #preview .latex-document .body { width: 100%; }
+        #preview .latex-document * { color: inherit !important; }
+        #preview .latex-document a, #preview .latex-document a:visited {
+            color: #0645ad !important;
+        }
+        #preview .latex-document code, #preview .latex-document pre {
+            background: transparent !important; color: #161616 !important;
+            box-shadow: none; padding: 0; border-radius: 0;
+        }
+        #preview .latex-document h1, #preview .latex-document h2,
+        #preview .latex-document h3, #preview .latex-document h4,
+        #preview .latex-document h5, #preview .latex-document h6 {
+            color: inherit; font-family: "Computer Modern Serif", serif;
+            line-height: 1.2; text-align: left;
+        }
+        #preview .latex-document p {
+            margin: 0; color: inherit; text-indent: 1.5em;
+        }
+        #preview .latex-document h1 + p, #preview .latex-document h2 + p,
+        #preview .latex-document h3 + p, #preview .latex-document h4 + p,
+        #preview .latex-document .noindent, #preview .latex-document .continue {
+            text-indent: 0;
+        }
+        #preview .latex-document .title { font-size: 1.7rem; }
+        #preview .latex-document .author, #preview .latex-document .date { font-size: 1.2rem; }
+        #preview .render-error { color: #b42318; white-space: pre-wrap; }
         #preview.appearance-code-wrap pre, #preview.appearance-code-wrap pre code { white-space: pre-wrap; word-break: break-word; }
         #preview.appearance-compact-tables { --preview-table-cell-padding: 5px 8px; }
 
@@ -579,6 +621,7 @@
             .appearance-grid { grid-template-columns: 1fr; }
             .appearance-field-wide { grid-column: auto; }
             .appearance-toggles { grid-template-columns: 1fr; }
+            #preview .latex-document { min-height: 0; padding: 28px 20px !important; }
             /* Hamburger: collapse toolbar into wrap */
         }
 
@@ -590,7 +633,7 @@
                 padding: 0 !important;
                 display: block !important;
                 height: auto !important;
-                background-color: var(--preview-bg) !important;
+                background: #fff !important; color: #000 !important;
                 transition: none !important;
                 -webkit-print-color-adjust: exact !important;
                 print-color-adjust: exact !important;
@@ -617,10 +660,18 @@
                 min-height: 0 !important;
                 border: none !important;
                 height: auto !important; max-height: none !important;
-                background-color: var(--preview-bg) !important;
+                background: #fff !important; color: #000 !important;
                 padding: 0 !important; overflow: visible !important; flex: none !important;
             }
             #preview > :first-child { margin-top: 0 !important; }
+            #preview.latex-mode { background: #fff !important; }
+            #preview .latex-document {
+                width: 100% !important; min-height: 0 !important; max-width: none !important;
+                padding: 0 !important; background: #fff !important; color: #000 !important;
+                box-shadow: none !important;
+            }
+            #preview h1, #preview h2, #preview h3, #preview h4, #preview h5, #preview h6,
+            #preview p, #preview li, #preview a, #preview a:visited { color: #000 !important; }
             #preview pre, #preview code {
                 white-space: pre-wrap !important; word-break: break-word !important;
                 overflow: visible !important; max-width: 100% !important;
@@ -667,11 +718,12 @@
 
     <div class="toolbar" role="toolbar" aria-label="Editor toolbar">
         <div class="toolbar-group" role="group" aria-label="File actions">
-            <button id="open-btn" class="icon-button" title="Open Markdown files (Ctrl+O)" aria-label="Open Markdown files"><i data-lucide="folder-open"></i></button>
-            <input type="file" id="open-file-input" accept=".md,.markdown,.txt" multiple hidden tabindex="-1">
+            <button id="open-btn" class="icon-button" title="Open Markdown or LaTeX files (Ctrl+O)" aria-label="Open Markdown or LaTeX files"><i data-lucide="folder-open"></i></button>
+            <input type="file" id="open-file-input" accept=".md,.markdown,.txt,.tex,.latex" multiple hidden tabindex="-1">
             <input id="filename-input" type="text" value="document.md"
                 title="Edit filename; clear it to derive the name from the first heading" aria-label="Filename" readonly>
-            <button id="save-btn" class="icon-button" title="Save active Markdown file (Ctrl+S)" aria-label="Save active file"><i data-lucide="save"></i></button>
+            <button id="save-btn" class="icon-button" title="Save to workspace (Ctrl+S)" aria-label="Save to workspace"><i data-lucide="save"></i></button>
+            <button id="download-btn" class="icon-button" title="Download source file (Ctrl+Shift+S)" aria-label="Download source file"><i data-lucide="download"></i></button>
             <button id="workspace-btn" class="icon-button" title="Back up or restore the workspace" aria-label="Back up or restore workspace"><i data-lucide="archive"></i></button>
         </div>
         <div class="toolbar-group" role="group" aria-label="Export actions">
@@ -683,7 +735,7 @@
             <button id="zen-btn" class="icon-button" title="Toggle zen mode" aria-label="Toggle zen mode"><i data-lucide="expand"></i></button>
             <button id="toc-toggle" class="icon-button" title="Toggle table of contents" aria-label="Toggle Table of Contents"
                 aria-controls="toc-panel" aria-expanded="false"><i data-lucide="list-tree"></i></button>
-            <button id="diagnostics-btn" class="icon-button" title="Review Markdown diagnostics" aria-label="Review Markdown diagnostics">
+            <button id="diagnostics-btn" class="icon-button" title="Review document diagnostics" aria-label="Review document diagnostics">
                 <i data-lucide="circle-check-big"></i><span id="diagnostics-count" class="icon-badge">0</span>
             </button>
         </div>
@@ -707,7 +759,7 @@
                     </div>
                     <div class="overflow-field">
                         <label for="theme-select" id="theme-label">Theme</label>
-                        <select id="theme-select" title="Choose preview theme" aria-labelledby="theme-label">
+                        <select id="theme-select" title="Choose preview theme (Ctrl+Alt+Y)" aria-labelledby="theme-label">
                             <option value="light">Light</option>
                             <option value="dark">Dark</option>
                             <option value="solarized">Solarized</option>
@@ -762,13 +814,13 @@
             <p>Choose “Save as PDF” in the browser print dialog.</p>
             <div class="settings-actions">
                 <button class="secondary" type="button" data-close-dialog>Cancel</button>
-                <button type="submit">Continue</button>
+                <button id="pdf-continue-btn" type="submit" autofocus>Continue</button>
             </div>
         </form>
     </dialog>
 
     <dialog id="diagnostics-dialog" class="settings-dialog" aria-labelledby="diagnostics-title">
-        <h2 id="diagnostics-title">Markdown diagnostics</h2>
+        <h2 id="diagnostics-title">Document diagnostics</h2>
         <p id="diagnostics-summary"></p>
         <ul id="diagnostics-list" class="diagnostics-list"></ul>
         <div class="settings-actions">
@@ -814,11 +866,13 @@
             <tbody>
                 <tr><td>New document</td><td><kbd>Ctrl</kbd> + <kbd>N</kbd></td></tr>
                 <tr><td>Open files</td><td><kbd>Ctrl</kbd> + <kbd>O</kbd></td></tr>
-                <tr><td>Save Markdown</td><td><kbd>Ctrl</kbd> + <kbd>S</kbd></td></tr>
+                <tr><td>Save to workspace</td><td><kbd>Ctrl</kbd> + <kbd>S</kbd></td></tr>
+                <tr><td>Download source</td><td><kbd>Ctrl</kbd> + <kbd>Shift</kbd> + <kbd>S</kbd></td></tr>
                 <tr><td>Export PDF</td><td><kbd>Ctrl</kbd> + <kbd>P</kbd></td></tr>
                 <tr><td>Copy HTML</td><td><kbd>Ctrl</kbd> + <kbd>Shift</kbd> + <kbd>C</kbd></td></tr>
                 <tr><td>Shortcut help</td><td><kbd>Ctrl</kbd> + <kbd>Shift</kbd> + <kbd>/</kbd></td></tr>
                 <tr><td>Toggle table of contents</td><td><kbd>Ctrl</kbd> + <kbd>Alt</kbd> + <kbd>T</kbd></td></tr>
+                <tr><td>Cycle preview theme</td><td><kbd>Ctrl</kbd> + <kbd>Alt</kbd> + <kbd>Y</kbd></td></tr>
                 <tr><td>Find / replace</td><td><kbd>Ctrl</kbd> + <kbd>F</kbd> / <kbd>Ctrl</kbd> + <kbd>H</kbd></td></tr>
                 <tr><td>Undo / redo</td><td><kbd>Ctrl</kbd> + <kbd>Z</kbd> / <kbd>Ctrl</kbd> + <kbd>Y</kbd></td></tr>
                 <tr><td>Switch document tabs</td><td><kbd>Left</kbd> / <kbd>Right</kbd></td></tr>
@@ -839,6 +893,8 @@
             <button class="template-option" type="button" data-template="notes"><i data-lucide="notebook-pen"></i><span><strong>Notes</strong><small>Dated notes and action items</small></span></button>
             <button class="template-option" type="button" data-template="report"><i data-lucide="clipboard-list"></i><span><strong>Report</strong><small>Summary, findings, and recommendations</small></span></button>
             <button class="template-option" type="button" data-template="diagram"><i data-lucide="workflow"></i><span><strong>Diagram</strong><small>Mermaid flowchart starter</small></span></button>
+            <button class="template-option" type="button" data-template="latex"><i data-lucide="sigma"></i><span><strong>LaTeX article</strong><small>Title, section, and equation</small></span></button>
+            <button class="template-option" type="button" data-template="academic-paper"><i data-lucide="graduation-cap"></i><span><strong>Academic paper</strong><small>Abstract, research sections, and references</small></span></button>
         </div>
         <div class="settings-actions"><button class="secondary" type="button" data-close-dialog>Cancel</button></div>
     </dialog>
@@ -934,7 +990,7 @@
     <div class="document-bar">
         <div id="document-tabs" role="tablist" aria-label="Open documents"></div>
         <button id="new-document-btn" title="New document (Ctrl+N)" aria-label="New document"><i data-lucide="plus"></i></button>
-        <span class="app-version" aria-label="Application version">v2.0.0</span>
+        <span class="app-version" aria-label="Application version">v2.1.0</span>
         <div id="layout-switcher" class="layout-switcher" role="group" aria-label="Workspace layout">
             <button type="button" data-layout="editor" aria-pressed="false">Editor</button>
             <button type="button" data-layout="split" aria-pressed="true">Split</button>
@@ -972,6 +1028,7 @@
             ['emoji extension', globalThis.markedEmoji],
             ['KaTeX', globalThis.katex],
             ['math extension', globalThis.markedKatex],
+            ['LaTeX parser', globalThis.latexjs],
             ['syntax highlighter', globalThis.hljs],
             ['Mermaid renderer', globalThis.mermaid],
             ['PlantUML encoder', globalThis.plantumlEncoder],
@@ -995,9 +1052,11 @@
         const pdfPaperSize = document.getElementById('pdf-paper-size');
         const pdfOrientation = document.getElementById('pdf-orientation');
         const pdfMargin = document.getElementById('pdf-margin');
+        const pdfContinueBtn = document.getElementById('pdf-continue-btn');
         const responseTime = document.getElementById('response-time');
         const filenameInput = document.getElementById('filename-input');
         const saveBtn = document.getElementById('save-btn');
+        const downloadBtn = document.getElementById('download-btn');
         const workspaceBtn = document.getElementById('workspace-btn');
         const workspaceDialog = document.getElementById('workspace-dialog');
         const workspaceError = document.getElementById('workspace-error');
@@ -1069,9 +1128,11 @@
         let isSwitchingDocument = false;
         let renderGeneration = 0;
         let diagnostics = [];
+        let latexAssetUrls = [];
         let scrollSyncSource = null;
         const HIGHLIGHT_CSS_URL = 'https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.11.1/styles/default.min.css';
         const KATEX_CSS_URL = 'https://cdn.jsdelivr.net/npm/katex@0.16.22/dist/katex.min.css';
+        const LATEX_BASE_URL = 'https://cdn.jsdelivr.net/npm/latex.js@0.12.6/dist/';
         const DEFAULT_PLANTUML_SERVER_URL = 'http://localhost';
         const EMOJI_DATA_URL = 'https://cdn.jsdelivr.net/npm/emojilib@4.0.2/dist/emoji-en-US.json';
         let plantUmlServerUrl = DEFAULT_PLANTUML_SERVER_URL;
@@ -1137,6 +1198,14 @@
             diagram: {
                 name: 'diagram.md',
                 content: '# System diagram\n\n```mermaid\nflowchart LR\n    Input[Input] --> Process[Process]\n    Process --> Output[Output]\n```\n'
+            },
+            latex: {
+                name: 'article.tex',
+                content: '\\documentclass{article}\n\\title{Article title}\n\\author{Author}\n\\date{\\today}\n\n\\begin{document}\n\\maketitle\n\n\\section{Introduction}\n\nStart writing here. Inline mathematics looks like $E = mc^2$.\n\n\\[\n    \\int_0^1 x^2\\,dx = \\frac{1}{3}\n\\]\n\n\\end{document}\n'
+            },
+            'academic-paper': {
+                name: 'research-paper.tex',
+                content: '\\documentclass{article}\n\\title{Research Paper Title}\n\\author{Author Name\\\\Institution}\n\\date{\\today}\n\n\\begin{document}\n\\maketitle\n\n\\begin{abstract}\nSummarize the research question, method, and principal result.\n\\end{abstract}\n\n\\section{Introduction}\nState the problem, motivation, and contribution.\n\n\\section{Method}\nDescribe the approach and assumptions.\n\n\\section{Results}\nPresent the main result:\n\\[\n  y = \\beta_0 + \\beta_1 x + \\varepsilon\n\\]\n\n\\section{Discussion}\nInterpret the result and note limitations.\n\n\\section{Conclusion}\nSummarize the contribution and future work.\n\n\\section*{References}\n\n[1] A. Author, \\textit{Article Title}, Journal Name, 2026.\n\n\\end{document}\n'
             }
         };
 
@@ -1501,6 +1570,7 @@
             editor.setValue(activeDocument.content);
             isSwitchingDocument = false;
             filenameInput.value = activeDocument.name;
+            updateActiveDocumentType();
             renderDocumentTabs();
             renderMarkdown();
             await persistWorkspace();
@@ -1555,28 +1625,136 @@
             return document.content !== document.savedContent;
         }
 
-        // Monaco theme mirroring the app's own theme switcher (kept per requirements)
+        monaco.languages.register({ id: 'latex', extensions: ['.tex', '.latex'], aliases: ['LaTeX', 'latex'] });
+        monaco.languages.setMonarchTokensProvider('latex', {
+            defaultToken: '',
+            tokenPostfix: '.latex',
+            tokenizer: {
+                root: [
+                    [/(\\(?:begin|end))(\s*)(\{)([^{}]+)(\})/, ['keyword.control', '', 'delimiter.curly', 'type.identifier', 'delimiter.curly']],
+                    [/\$\$/, { token: 'string.delimiter', next: '@mathDisplay' }],
+                    [/\$/, { token: 'string.delimiter', next: '@mathInline' }],
+                    [/\\\[/, { token: 'string.delimiter', next: '@mathBracket' }],
+                    [/\\(?:documentclass|usepackage|input|include|title|author|date|maketitle|part|chapter|section|subsection|subsubsection|paragraph|subparagraph|appendix|label|ref|pageref|cite|bibliography|bibliographystyle)\b/, 'keyword.control'],
+                    [/\\(?:textbf|textit|texttt|textsf|textrm|emph|underline|footnote|url|href|includegraphics|caption|item)\b/, 'keyword'],
+                    [/\\(?:[a-zA-Z@]+|.)/, 'tag'],
+                    [/%.*$/, 'comment'],
+                    [/[{}\[\]()]/, 'delimiter'],
+                    [/[&_^#]/, 'operator'],
+                    [/\d+(?:\.\d+)?/, 'number'],
+                    [/[a-zA-Z]+/, 'identifier']
+                ],
+                mathCommon: [
+                    [/\\(?:[a-zA-Z@]+|.)/, 'keyword'],
+                    [/[{}\[\]()]/, 'delimiter'],
+                    [/[=+\-*/_^&|<>]/, 'operator'],
+                    [/\d+(?:\.\d+)?/, 'number'],
+                    [/[a-zA-Z]+/, 'variable']
+                ],
+                mathInline: [
+                    [/\$/, { token: 'string.delimiter', next: '@pop' }],
+                    { include: '@mathCommon' }
+                ],
+                mathDisplay: [
+                    [/\$\$/, { token: 'string.delimiter', next: '@pop' }],
+                    { include: '@mathCommon' }
+                ],
+                mathBracket: [
+                    [/\\\]/, { token: 'string.delimiter', next: '@pop' }],
+                    { include: '@mathCommon' }
+                ]
+            }
+        });
+        monaco.languages.setLanguageConfiguration('latex', {
+            comments: { lineComment: '%' },
+            brackets: [['{', '}'], ['[', ']'], ['(', ')']],
+            autoClosingPairs: [
+                { open: '{', close: '}' }, { open: '[', close: ']' },
+                { open: '(', close: ')' }, { open: '$', close: '$' }
+            ],
+            surroundingPairs: [
+                { open: '{', close: '}' }, { open: '[', close: ']' },
+                { open: '(', close: ')' }, { open: '$', close: '$' }
+            ]
+        });
+
+        function latexThemeRules(palette) {
+            return [
+                { token: 'comment.latex', foreground: palette.comment, fontStyle: 'italic' },
+                { token: 'keyword.control.latex', foreground: palette.control, fontStyle: 'bold' },
+                { token: 'keyword.latex', foreground: palette.keyword },
+                { token: 'tag.latex', foreground: palette.command },
+                { token: 'type.identifier.latex', foreground: palette.environment },
+                { token: 'string.delimiter.latex', foreground: palette.math },
+                { token: 'number.latex', foreground: palette.number },
+                { token: 'operator.latex', foreground: palette.operator },
+                { token: 'variable.latex', foreground: palette.variable }
+            ];
+        }
+
+        // Monaco themes inherit their normal language colors and add LaTeX-specific tokens.
+        monaco.editor.defineTheme('app-light', {
+            base: 'vs', inherit: true,
+            rules: latexThemeRules({
+                comment: '6A737D', control: '7A3E9D', keyword: '005CC5', command: '0366D6',
+                environment: '953800', math: 'A31515', number: '098658', operator: '444444', variable: '001080'
+            }),
+            colors: {}
+        });
+        monaco.editor.defineTheme('app-dark', {
+            base: 'vs-dark', inherit: true,
+            rules: latexThemeRules({
+                comment: '8B949E', control: 'C586C0', keyword: '569CD6', command: '4FC1FF',
+                environment: '4EC9B0', math: 'CE9178', number: 'B5CEA8', operator: 'D4D4D4', variable: '9CDCFE'
+            }),
+            colors: {}
+        });
+        monaco.editor.defineTheme('app-high-contrast', {
+            base: 'hc-black', inherit: true,
+            rules: latexThemeRules({
+                comment: '7CA668', control: 'FF9DFF', keyword: '6CB6FF', command: '00E5FF',
+                environment: '71F4D1', math: 'FFB86C', number: 'D7FFAF', operator: 'FFFFFF', variable: '9CDCFE'
+            }),
+            colors: {}
+        });
         monaco.editor.defineTheme('solarized', {
             base: 'vs',
             inherit: true,
-            rules: [],
+            rules: latexThemeRules({
+                comment: '93A1A1', control: '6C71C4', keyword: '268BD2', command: '2AA198',
+                environment: 'B58900', math: 'D33682', number: 'CB4B16', operator: '657B83', variable: '268BD2'
+            }),
             colors: { 'editor.background': '#fdf6e3', 'editor.foreground': '#586e75' }
         });
         function getMonacoTheme(theme) {
-            if (theme === 'dark') return 'vs-dark';
-            if (theme === 'high-contrast') return 'hc-black';
+            if (theme === 'dark') return 'app-dark';
+            if (theme === 'high-contrast') return 'app-high-contrast';
             if (theme === 'solarized') return 'solarized';
-            return 'vs';
+            return 'app-light';
         }
 
         const editor = monaco.editor.create(editorContainer, {
             value: getActiveDocument().content,
-            language: 'markdown',
+            language: /\.(?:tex|latex)$/i.test(getActiveDocument().name) ? 'latex' : 'markdown',
             automaticLayout: true,
             wordWrap: 'on'
         });
+        editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyMod.Alt | monaco.KeyCode.KeyY, cycleTheme);
         const sourceNavigationDecorations = editor.createDecorationsCollection();
         let sourceNavigationTimeout;
+
+        function isLatexDocument(document = getActiveDocument()) {
+            return /\.(?:tex|latex)$/i.test(document.name);
+        }
+
+        function updateActiveDocumentType() {
+            const latex = isLatexDocument();
+            monaco.editor.setModelLanguage(editor.getModel(), latex ? 'latex' : 'markdown');
+            editorContainer.setAttribute('aria-label', latex ? 'LaTeX input' : 'Markdown input');
+            preview.setAttribute('aria-label', latex ? 'LaTeX preview' : 'Markdown preview');
+            profileSelect.disabled = latex;
+            profileSelect.title = latex ? 'Markdown parsing profiles do not apply to LaTeX documents' : 'Choose Markdown parsing profile';
+        }
 
         function setLayout(layout) {
             const nextLayout = ['editor', 'split', 'preview'].includes(layout) ? layout : 'split';
@@ -1619,7 +1797,10 @@
         }
 
         function deriveFilename(markdownText) {
-            const titleMatch = markdownText.match(/^\s*#\s+(.+?)\s*#*\s*$/m);
+            const latex = isLatexDocument();
+            const titleMatch = latex
+                ? markdownText.match(/\\title\s*\{([^{}]+)\}/)
+                : markdownText.match(/^\s*#\s+(.+?)\s*#*\s*$/m);
             const title = titleMatch ? titleMatch[1]
                 .replace(/`([^`]+)`/g, '$1')
                 .replace(/[*_~]/g, '')
@@ -1631,7 +1812,7 @@
                 .toLowerCase()
                 .slice(0, 80)
                 .replace(/-+$/g, '');
-            return (slug || 'document') + '.md';
+            return (slug || (latex ? 'article' : 'document')) + (latex ? '.tex' : '.md');
         }
 
         function updateFilenameFromTitle(markdownText) {
@@ -1682,6 +1863,7 @@
             editor.setValue(activeDocument.content);
             isSwitchingDocument = false;
             filenameInput.value = activeDocument.name;
+            updateActiveDocumentType();
             renderDocumentTabs();
             renderMarkdown();
             scheduleWorkspacePersistence();
@@ -1696,6 +1878,7 @@
                 editor.setValue(document.content);
                 isSwitchingDocument = false;
                 filenameInput.value = document.name;
+                updateActiveDocumentType();
                 renderMarkdown();
             }
             renderDocumentTabs();
@@ -1723,6 +1906,7 @@
                 editor.setValue(nextDocument.content);
                 isSwitchingDocument = false;
                 filenameInput.value = nextDocument.name;
+                updateActiveDocumentType();
                 renderMarkdown();
             }
             renderDocumentTabs();
@@ -1822,7 +2006,78 @@
             });
         }
 
-        // Render Markdown
+        function scopeLatexSelector(selector) {
+            return selector.split(',').map(function(part) {
+                const trimmed = part.trim();
+                if (/^(?::root|:host|html|body)$/.test(trimmed)) return '#preview .latex-document';
+                if (/^(?:html|body)\b/.test(trimmed)) {
+                    return '#preview .latex-document' + trimmed.replace(/^(?:html|body)/, '');
+                }
+                return '#preview .latex-document ' + trimmed;
+            }).join(', ');
+        }
+
+        function scopeLatexCssRules(rules) {
+            Array.from(rules).forEach(function(rule) {
+                if (rule.type === CSSRule.STYLE_RULE) rule.selectorText = scopeLatexSelector(rule.selectorText);
+                else if (rule.cssRules) scopeLatexCssRules(rule.cssRules);
+            });
+        }
+
+        async function syncLatexAssets(assets) {
+            latexAssetUrls = Array.from(assets.querySelectorAll('link[rel="stylesheet"]')).map(function(link) { return link.href; });
+            const assetKey = latexAssetUrls.join('|');
+            let style = document.head.querySelector('style[data-latexjs-asset]');
+            if (style && style.dataset.assetKey === assetKey) return;
+            const css = (await Promise.all(latexAssetUrls.map(function(url) { return fetchExportCss(url); }))).join('\n');
+            const sheet = new CSSStyleSheet();
+            await sheet.replace(css);
+            scopeLatexCssRules(sheet.cssRules);
+            if (!style) {
+                style = document.createElement('style');
+                style.dataset.latexjsAsset = '';
+                document.head.appendChild(style);
+            }
+            style.dataset.assetKey = assetKey;
+            style.textContent = Array.from(sheet.cssRules).map(function(rule) { return rule.cssText; }).join('\n');
+        }
+
+        function clearLatexAssets() {
+            document.head.querySelectorAll('[data-latexjs-asset]').forEach(function(asset) { asset.remove(); });
+            latexAssetUrls = [];
+        }
+
+        async function renderLatex(sourceText) {
+            preview.classList.add('latex-mode');
+            try {
+                const generator = new globalThis.latexjs.HtmlGenerator({ hyphenate: false });
+                const result = globalThis.latexjs.parse(sourceText, { generator: generator });
+                await syncLatexAssets(result.stylesAndScripts(LATEX_BASE_URL));
+                const fragment = DOMPurify.sanitize(result.domFragment(), { RETURN_DOM_FRAGMENT: true });
+                const container = document.createElement('article');
+                container.className = 'latex-document';
+                container.appendChild(fragment);
+                preview.replaceChildren(container);
+                diagnostics = [];
+            } catch (error) {
+                clearLatexAssets();
+                const message = document.createElement('pre');
+                message.className = 'render-error';
+                message.setAttribute('role', 'alert');
+                message.textContent = error.message || 'Unable to render this LaTeX document.';
+                preview.replaceChildren(message);
+                const location = error.location && error.location.start;
+                diagnostics = [{
+                    line: location ? location.line : 1,
+                    column: location ? location.column : 1,
+                    message: error.message || 'Unable to parse this LaTeX document.'
+                }];
+            }
+            diagnosticsBtn.querySelector('#diagnostics-count').textContent = diagnostics.length;
+            diagnosticsBtn.setAttribute('aria-label', 'Review LaTeX diagnostics, ' + diagnostics.length + ' issues');
+        }
+
+        // Render the active Markdown or LaTeX document.
         async function renderMarkdown() {
             const generation = ++renderGeneration;
             const start = performance.now();
@@ -1832,6 +2087,16 @@
             updateFilenameFromTitle(markdownText);
             renderDocumentTabs();
             scheduleWorkspacePersistence();
+            if (isLatexDocument(activeDocument)) {
+                await renderLatex(markdownText);
+                if (generation !== renderGeneration) return;
+                updateCounts(markdownText);
+                buildTOC();
+                responseTime.textContent = '\u26A1 ' + (performance.now() - start).toFixed(2) + 'ms';
+                return;
+            }
+            preview.classList.remove('latex-mode');
+            clearLatexAssets();
             const profileOptions = profileSelect.value === 'commonmark'
                 ? { gfm: false, breaks: false, pedantic: false }
                 : { gfm: true, breaks: false, pedantic: false };
@@ -2117,6 +2382,14 @@
             localStorage.setItem('theme', theme);
             initializeMermaid(theme);
         }
+        function cycleTheme() {
+            const themes = ['light', 'dark', 'solarized', 'high-contrast'];
+            const nextTheme = themes[(themes.indexOf(themeSelect.value) + 1) % themes.length];
+            themeSelect.value = nextTheme;
+            setTheme(nextTheme);
+            renderMarkdown();
+            showToast('Theme: ' + themeSelect.options[themeSelect.selectedIndex].text);
+        }
         themeSelect.addEventListener('change', function() {
             setTheme(themeSelect.value);
             renderMarkdown();
@@ -2223,8 +2496,6 @@
         renderMarkdown();
 
         function printPreview() {
-            const themeClass = Array.from(document.body.classList).find(function(c) { return c.startsWith('theme-'); });
-            document.documentElement.classList.add(themeClass);
             let printPageStyle = document.getElementById('print-page-style');
             if (!printPageStyle) {
                 printPageStyle = document.createElement('style');
@@ -2233,7 +2504,6 @@
             }
             printPageStyle.textContent = '@page { size: ' + pdfPaperSize.value + ' ' + pdfOrientation.value + '; margin: ' + pdfMargin.value + 'mm; }';
             function cleanup() {
-                document.documentElement.classList.remove(themeClass);
                 globalThis.removeEventListener('afterprint', cleanup);
             }
             globalThis.addEventListener('afterprint', cleanup);
@@ -2249,6 +2519,11 @@
         });
         pdfSettingsDialog.querySelector('[data-close-dialog]').addEventListener('click', function() {
             pdfSettingsDialog.close();
+        });
+        pdfSettingsForm.addEventListener('keydown', function(event) {
+            if (event.key !== 'Enter' || event.target.tagName === 'BUTTON') return;
+            event.preventDefault();
+            pdfSettingsForm.requestSubmit(pdfContinueBtn);
         });
         pdfSettingsForm.addEventListener('submit', function(event) {
             event.preventDefault();
@@ -2274,8 +2549,10 @@
             activeDocument.filenameCustom = Boolean(requestedName);
             activeDocument.name = requestedName || deriveFilename(editor.getValue());
             filenameInput.value = activeDocument.name;
+            updateActiveDocumentType();
             renderDocumentTabs();
             scheduleWorkspacePersistence();
+            renderMarkdown();
         }
         filenameInput.addEventListener('click', beginFilenameEdit);
         filenameInput.addEventListener('blur', commitFilenameEdit);
@@ -2297,12 +2574,21 @@
             }
         });
 
-        // Save Markdown to file
-        saveBtn.addEventListener('click', function() {
+        async function saveActiveDocument() {
+            const activeDocument = getActiveDocument();
+            activeDocument.content = editor.getValue();
+            activeDocument.savedContent = activeDocument.content;
+            renderDocumentTabs();
+            await persistWorkspace();
+            showToast('Saved to workspace');
+        }
+
+        function downloadActiveDocument() {
             let filename = filenameInput.value.trim();
-            if (!filename) filename = 'document.md';
-            if (!filename.endsWith('.md')) filename += '.md';
-            const blob = new Blob([editor.getValue()], { type: 'text/markdown' });
+            const latex = isLatexDocument();
+            if (!filename) filename = latex ? 'article.tex' : 'document.md';
+            if (!/\.[^.]+$/.test(filename)) filename += latex ? '.tex' : '.md';
+            const blob = new Blob([editor.getValue()], { type: latex ? 'application/x-tex' : 'text/markdown' });
             const a = document.createElement('a');
             a.href = URL.createObjectURL(blob);
             a.download = filename;
@@ -2312,13 +2598,11 @@
                 a.remove();
                 URL.revokeObjectURL(a.href);
             }, 100);
-            const activeDocument = getActiveDocument();
-            activeDocument.content = editor.getValue();
-            activeDocument.savedContent = activeDocument.content;
-            renderDocumentTabs();
-            scheduleWorkspacePersistence();
-            showToast('File saved: ' + filename);
-        });
+            showToast('Downloaded: ' + filename);
+        }
+
+        saveBtn.addEventListener('click', saveActiveDocument);
+        downloadBtn.addEventListener('click', downloadActiveDocument);
 
         workspaceBtn.addEventListener('click', function() {
             workspaceError.hidden = true;
@@ -2378,6 +2662,7 @@
                 editor.setValue(activeDocument.content);
                 isSwitchingDocument = false;
                 filenameInput.value = activeDocument.name;
+                updateActiveDocumentType();
                 renderDocumentTabs();
                 renderMarkdown();
                 await persistWorkspace();
@@ -2408,6 +2693,23 @@
             }
         });
 
+        async function fetchExportCss(url, visited = new Set()) {
+            if (visited.has(url)) return '';
+            visited.add(url);
+            const response = await fetch(url);
+            if (!response.ok) return '';
+            let css = await response.text();
+            const imports = Array.from(css.matchAll(/^\s*@import\s+(?:url\(\s*)?(?:(['"])(.*?)\1|([^;\s)]+))\s*\)?\s*;?/gm));
+            for (const match of imports) {
+                const importedCss = await fetchExportCss(new URL(match[2] || match[3], url).href, visited);
+                css = css.replace(match[0], importedCss);
+            }
+            return css.replace(/url\((['"]?)(?!data:|https?:|\/)([^)'"\s]+)\1\)/g,
+                function(match, quote, relativeUrl) {
+                    return 'url(' + quote + new URL(relativeUrl, url).href + quote + ')';
+                });
+        }
+
         // Export clean rendered HTML with the active theme and syntax colors
         exportHtmlBtn.addEventListener('click', async function() {
             const previewStyle = getComputedStyle(preview);
@@ -2419,16 +2721,15 @@
             const paragraphStyle = getComputedStyle(preview.querySelector('p') || preview);
             let dependencyCss = '';
             try {
-                const responses = await Promise.all([fetch(HIGHLIGHT_CSS_URL), fetch(KATEX_CSS_URL)]);
-                const styles = await Promise.all(responses.map(function(response) {
-                    return response.ok ? response.text() : '';
-                }));
-                styles[1] = styles[1].replaceAll('url(fonts/', 'url(https://cdn.jsdelivr.net/npm/katex@0.16.22/dist/fonts/');
+                const dependencyUrls = isLatexDocument()
+                    ? latexAssetUrls
+                    : [HIGHLIGHT_CSS_URL, KATEX_CSS_URL];
+                const styles = await Promise.all(dependencyUrls.map(function(url) { return fetchExportCss(url); }));
                 dependencyCss = styles.join('\n');
             } catch (error) {
                 console.warn('Unable to include dependency styles in export:', error);
             }
-            const title = getActiveDocument().name.replace(/\.md$/i, '');
+            const title = getActiveDocument().name.replace(/\.(?:md|markdown|tex|latex)$/i, '');
             const escapedTitle = title.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;');
             const googleFontsLink = document.getElementById('preview-google-fonts');
             const googleFontsHtml = googleFontsLink
@@ -2463,7 +2764,7 @@
             const blob = new Blob([html], { type: 'text/html' });
             const a = document.createElement('a');
             a.href = URL.createObjectURL(blob);
-            a.download = (filenameInput.value.replace(/\.md$/i, '') || 'document') + '.html';
+            a.download = (filenameInput.value.replace(/\.(?:md|markdown|tex|latex)$/i, '') || 'document') + '.html';
             document.body.appendChild(a);
             a.click();
             setTimeout(function() {
@@ -2504,7 +2805,7 @@
             }
         });
 
-        // Open one or more Markdown files
+        // Open one or more Markdown or LaTeX files
         openBtn.addEventListener('click', function() { openFileInput.click(); });
         openFileInput.addEventListener('change', async function() {
             const files = Array.from(openFileInput.files || []);
@@ -2694,9 +2995,19 @@
                 tocToggle.click();
                 return;
             }
+            if (!modalOpen && e.altKey && e.code === 'KeyY') {
+                e.preventDefault();
+                cycleTheme();
+                return;
+            }
             if (e.shiftKey && e.key === 'C') {
                 e.preventDefault();
                 copyBtn.click();
+                return;
+            }
+            if (e.shiftKey && e.key.toLowerCase() === 's') {
+                e.preventDefault();
+                downloadBtn.click();
                 return;
             }
             const action = shortcutMap[e.key];
@@ -2708,6 +3019,7 @@
 
         // --- Hide loading overlay once ready ---
         filenameInput.value = getActiveDocument().name;
+        updateActiveDocumentType();
         renderDocumentTabs();
         globalThis.lucide.createIcons();
         loadingOverlay.style.display = 'none';
