@@ -26,7 +26,7 @@
   --transition-fast: 150ms ease-out;
   --transition-med: 260ms cubic-bezier(0.22, 0.61, 0.36, 1);
   --card-max-height: 60vh;
-  --card-main-font-min: 4rem;
+  --card-main-font-min: 2rem;
   --card-main-font-vw: 10vw;
   --card-main-font-max: 4.8rem;
   --card-sub-font-min: 1.05rem;
@@ -174,12 +174,16 @@ body {
 
 .card-main {
   flex: 1;
+  min-width: 0;
   display: flex;
   align-items: center;
   justify-content: center;
+  max-width: 100%;
   font-size: clamp(var(--card-main-font-min), var(--card-main-font-vw), var(--card-main-font-max));
   font-weight: 700;
   letter-spacing: 0.08em;
+  line-height: 1.15;
+  overflow-wrap: anywhere;
   text-align: center;
   text-shadow: 0 20px 45px rgba(0, 0, 0, 0.75);
 }
@@ -238,6 +242,14 @@ body {
   color: var(--accent);
   border: 1px solid rgba(56, 189, 248, 0.6);
   box-shadow: 0 0 0 1px rgba(15, 23, 42, 0.9);
+}
+
+.btn.navigation {
+  min-width: 112px;
+  min-height: 48px;
+  padding: 12px 18px;
+  font-size: 1rem;
+  font-weight: 600;
 }
 
 .btn:active {
@@ -324,9 +336,9 @@ body {
       </section>
 
       <section class="controls">
-        <button id="prevBtn" class="btn secondary" type="button">◀ Prev</button>
+        <button id="prevBtn" class="btn secondary navigation" type="button">◀ Previous</button>
         <button id="shuffleBtn" class="btn ghost" type="button">Shuffle</button>
-        <button id="nextBtn" class="btn primary" type="button">Next ▶</button>
+        <button id="nextBtn" class="btn primary navigation" type="button">Next ▶</button>
       </section>
 
       <section class="progress">
@@ -1067,6 +1079,26 @@ function getMixedConsonants(subjectKey) {
   return lang.vyanjan;
 }
 
+async function loadTamilWords() {
+  try {
+    const response = await fetch("words.txt");
+    if (!response.ok) return;
+
+    const text = await response.text();
+    const places = text
+      .split(/\r?\n/u)
+      .filter(function (line) { return line.trim() && !line.startsWith("#"); })
+      .map(function (line) {
+        const [main, sub = ""] = line.split("\t");
+        return { main: main.trim(), sub: sub.trim() };
+      });
+
+    languages.tamil.words.push(...places);
+  } catch (_error) {
+    // Keep the built-in cards available when the optional word list cannot load.
+  }
+}
+
 const subjectSelect = document.getElementById("subjectSelect");
 const modeSelect = document.getElementById("modeSelect");
 const cardMain = document.getElementById("cardMain");
@@ -1300,7 +1332,8 @@ function initEvents() {
   });
 }
 
-function init() {
+async function init() {
+  await loadTamilWords();
   initSubjectOptions();
   buildOrder();
   initEvents();
