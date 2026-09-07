@@ -153,6 +153,8 @@ body {
   display: flex;
   align-items: stretch;
   justify-content: center;
+  cursor: pointer;
+  touch-action: manipulation;
 }
 
 .card::before {
@@ -338,6 +340,7 @@ body {
       <section class="controls">
         <button id="prevBtn" class="btn secondary navigation" type="button">◀ Previous</button>
         <button id="shuffleBtn" class="btn ghost" type="button">Shuffle</button>
+        <button id="toggleSubBtn" class="btn ghost" type="button" aria-pressed="false">Show meaning</button>
         <button id="nextBtn" class="btn primary navigation" type="button">Next ▶</button>
       </section>
 
@@ -1101,11 +1104,13 @@ async function loadTamilWords() {
 
 const subjectSelect = document.getElementById("subjectSelect");
 const modeSelect = document.getElementById("modeSelect");
+const flashcard = document.getElementById("flashcard");
 const cardMain = document.getElementById("cardMain");
 const cardSub = document.getElementById("cardSub");
 const prevBtn = document.getElementById("prevBtn");
 const nextBtn = document.getElementById("nextBtn");
 const shuffleBtn = document.getElementById("shuffleBtn");
+const toggleSubBtn = document.getElementById("toggleSubBtn");
 const progressText = document.getElementById("progressText");
 
 let currentSubjectKey = "tamil";
@@ -1114,7 +1119,14 @@ let currentIndex = 0;
 let order = [];
 let mathHistory = [];
 let mathPosition = -1;
+let showSubCard = false;
 const MATH_HISTORY_MAX = 5;
+
+function updateSubCardVisibility() {
+  cardSub.hidden = !showSubCard;
+  toggleSubBtn.textContent = showSubCard ? "Hide meaning" : "Show meaning";
+  toggleSubBtn.setAttribute("aria-pressed", String(showSubCard));
+}
 
 function initSubjectOptions() {
   Object.entries(subjects).forEach(([key, value]) => {
@@ -1297,6 +1309,12 @@ function onNext() {
   runSwipe("right");
 }
 
+function onCardClick(event) {
+  const midpoint = flashcard.getBoundingClientRect().left + flashcard.offsetWidth / 2;
+  if (event.clientX < midpoint) onPrev();
+  else onNext();
+}
+
 function onShuffle() {
   if (isMathMode()) {
     resetMathHistory();
@@ -1315,6 +1333,11 @@ function initEvents() {
   prevBtn.addEventListener("click", onPrev);
   nextBtn.addEventListener("click", onNext);
   shuffleBtn.addEventListener("click", onShuffle);
+  flashcard.addEventListener("click", onCardClick);
+  toggleSubBtn.addEventListener("click", function () {
+    showSubCard = !showSubCard;
+    updateSubCardVisibility();
+  });
 
   var multiplyByInput = document.getElementById("multiplyByInput");
   if (multiplyByInput) {
@@ -1337,6 +1360,7 @@ async function init() {
   initSubjectOptions();
   buildOrder();
   initEvents();
+  updateSubCardVisibility();
   renderCard();
 }
 
