@@ -125,6 +125,7 @@ body {
   flex-direction: column;
   justify-content: space-between;
   align-items: stretch;
+  min-height: 0;
   padding: 12px 0 4px;
 }
 
@@ -133,6 +134,7 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
+  min-height: 0;
   padding: 10px 0;
   perspective: 1200px;
 }
@@ -199,10 +201,26 @@ body {
 
 .controls {
   display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
+  gap: 8px;
   margin-top: 6px;
-  flex-wrap: wrap;
+  width: 100%;
+}
+
+.navigation-controls,
+.utility-controls {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+}
+
+.navigation-controls .navigation {
+  flex: 1 1 0;
+  min-width: 0;
 }
 
 .btn-group {
@@ -247,7 +265,6 @@ body {
 }
 
 .btn.navigation {
-  min-width: 112px;
   min-height: 48px;
   padding: 12px 18px;
   font-size: 1rem;
@@ -292,16 +309,26 @@ body {
     padding-inline: 12px;
   }
 
+  .card {
+    max-height: 42vh;
+  }
+
   .controls {
     gap: 6px;
   }
 
-  .btn-group {
-    gap: 4px;
+  .navigation-controls,
+  .utility-controls {
+    gap: 6px;
   }
 
   .btn {
     padding-inline: 12px;
+  }
+
+  .btn.navigation {
+    padding-inline: 8px;
+    font-size: 0.9rem;
   }
 }
 
@@ -338,10 +365,14 @@ body {
       </section>
 
       <section class="controls">
-        <button id="prevBtn" class="btn secondary navigation" type="button">◀ Previous</button>
-        <button id="shuffleBtn" class="btn ghost" type="button">Shuffle</button>
-        <button id="toggleSubBtn" class="btn ghost" type="button" aria-pressed="false">Show meaning</button>
-        <button id="nextBtn" class="btn primary navigation" type="button">Next ▶</button>
+        <div class="navigation-controls">
+          <button id="prevBtn" class="btn secondary navigation" type="button">◀ Previous</button>
+          <button id="nextBtn" class="btn primary navigation" type="button">Next ▶</button>
+        </div>
+        <div class="utility-controls">
+          <button id="shuffleBtn" class="btn ghost" type="button">Shuffle</button>
+          <button id="toggleSubBtn" class="btn ghost" type="button" aria-pressed="false">Show meaning</button>
+        </div>
       </section>
 
       <section class="progress">
