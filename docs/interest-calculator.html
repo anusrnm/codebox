@@ -1,0 +1,408 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Investment Growth Calculator</title>
+
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+  <style>
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      padding: 12px;
+      background: #f3f6fa;
+      color: #172033;
+      font-family: Arial, sans-serif;
+    }
+
+    .app {
+      width: 100%;
+      max-width: 900px;
+      margin: auto;
+    }
+
+    .card {
+      background: white;
+      padding: 14px;
+      border-radius: 10px;
+      box-shadow: 0 2px 10px rgba(0, 0, 0, 0.08);
+    }
+
+    h1 {
+      margin: 0 0 12px;
+      font-size: 21px;
+      text-align: center;
+    }
+
+    .hint {
+      margin: 0 0 12px;
+      color: #667085;
+      font-size: 13px;
+      text-align: center;
+    }
+
+    .inputs {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 8px;
+    }
+
+    label {
+      display: block;
+      margin-bottom: 4px;
+      font-size: 12px;
+      font-weight: bold;
+    }
+
+    input {
+      width: 100%;
+      min-width: 0;
+      padding: 8px;
+      border: 1px solid #cbd5e1;
+      border-radius: 6px;
+      font-size: 14px;
+    }
+
+    input:focus {
+      outline: 2px solid #93c5fd;
+      border-color: #2563eb;
+    }
+
+    input.calculated {
+      background: #eff6ff;
+      border-color: #60a5fa;
+    }
+
+    .status {
+      min-height: 18px;
+      margin: 8px 0;
+      color: #dc2626;
+      font-size: 12px;
+      text-align: center;
+    }
+
+    .summary {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 8px;
+      margin: 8px 0 12px;
+    }
+
+    .summary-box {
+      padding: 9px 5px;
+      background: #eef4ff;
+      border-radius: 7px;
+      text-align: center;
+    }
+
+    .summary-box small {
+      display: block;
+      color: #64748b;
+      font-size: 11px;
+    }
+
+    .summary-box strong {
+      display: block;
+      margin-top: 3px;
+      color: #174ea6;
+      font-size: 15px;
+    }
+
+    .chart-container {
+      position: relative;
+      height: 390px;
+    }
+
+    @media (max-width: 650px) {
+      body {
+        padding: 6px;
+      }
+
+      .card {
+        padding: 10px;
+      }
+
+      h1 {
+        font-size: 18px;
+      }
+
+      .inputs {
+        grid-template-columns: repeat(2, 1fr);
+      }
+
+      .summary-box strong {
+        font-size: 13px;
+      }
+
+      .chart-container {
+        height: 300px;
+      }
+    }
+
+    @media (max-width: 360px) {
+      .inputs,
+      .summary {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+</head>
+
+<body>
+  <main class="app">
+    <section class="card">
+      <h1>Investment Growth Calculator</h1>
+
+      <p class="hint">
+        Leave any one field blank to calculate it automatically.
+      </p>
+
+      <div class="inputs">
+        <div>
+          <label for="principal">Initial Investment (₹)</label>
+          <input id="principal" type="number" value="8000000" min="0" />
+        </div>
+
+        <div>
+          <label for="rate">Annual Return (%)</label>
+          <input id="rate" type="number" value="15" step="0.01" min="0" />
+        </div>
+
+        <div>
+          <label for="years">Period (Years)</label>
+          <input id="years" type="number" value="5" min="0" step="1" />
+        </div>
+
+        <div>
+          <label for="finalValue">Final Value (₹)</label>
+          <input id="finalValue" type="number" placeholder="Auto-calculate" min="0" />
+        </div>
+      </div>
+
+      <div id="status" class="status"></div>
+
+      <div class="summary">
+        <div class="summary-box">
+          <small>Initial Value</small>
+          <strong id="initialDisplay">—</strong>
+        </div>
+
+        <div class="summary-box">
+          <small>Final Value</small>
+          <strong id="finalDisplay">—</strong>
+        </div>
+
+        <div class="summary-box">
+          <small>Total Growth</small>
+          <strong id="growthDisplay">—</strong>
+        </div>
+      </div>
+
+      <div class="chart-container">
+        <canvas id="growthChart"></canvas>
+      </div>
+    </section>
+  </main>
+
+  <script>
+    const principalInput = document.getElementById("principal");
+    const rateInput = document.getElementById("rate");
+    const yearsInput = document.getElementById("years");
+    const finalInput = document.getElementById("finalValue");
+
+    const status = document.getElementById("status");
+    const initialDisplay = document.getElementById("initialDisplay");
+    const finalDisplay = document.getElementById("finalDisplay");
+    const growthDisplay = document.getElementById("growthDisplay");
+
+    let chart;
+
+    function formatCurrency(value) {
+      if (!Number.isFinite(value)) return "—";
+
+      if (value >= 10000000) {
+        return "₹" + (value / 10000000).toFixed(2) + " crore";
+      }
+
+      if (value >= 100000) {
+        return "₹" + (value / 100000).toFixed(2) + " lakh";
+      }
+
+      return "₹" + Math.round(value).toLocaleString("en-IN");
+    }
+
+    function getNumber(input) {
+      const value = input.value.trim();
+      return value === "" ? null : Number(value);
+    }
+
+    function setCalculatedValue(input, value) {
+      input.value = Number.isFinite(value) ? value.toFixed(2) : "";
+      input.classList.add("calculated");
+    }
+
+    function clearCalculatedStyles() {
+      [principalInput, rateInput, yearsInput, finalInput]
+        .forEach(input => input.classList.remove("calculated"));
+    }
+
+    function calculate() {
+      clearCalculatedStyles();
+      status.textContent = "";
+
+      let principal = getNumber(principalInput);
+      let rate = getNumber(rateInput);
+      let years = getNumber(yearsInput);
+      let finalValue = getNumber(finalInput);
+
+      const values = [principal, rate, years, finalValue];
+      const blankCount = values.filter(value => value === null).length;
+
+      if (blankCount > 1) {
+        status.textContent = "Enter three values and leave only one field blank.";
+        clearChart();
+        return;
+      }
+
+      if (blankCount === 1) {
+        try {
+          if (principal === null) {
+            if (finalValue <= 0 || years <= 0 || rate <= -100) throw new Error();
+            principal = finalValue / Math.pow(1 + rate / 100, years);
+            setCalculatedValue(principalInput, principal);
+          }
+
+          else if (rate === null) {
+            if (principal <= 0 || finalValue <= 0 || years <= 0) throw new Error();
+            rate = (Math.pow(finalValue / principal, 1 / years) - 1) * 100;
+            setCalculatedValue(rateInput, rate);
+          }
+
+          else if (years === null) {
+            if (principal <= 0 || finalValue <= 0 || rate <= -100) throw new Error();
+            years = Math.log(finalValue / principal) / Math.log(1 + rate / 100);
+            setCalculatedValue(yearsInput, years);
+          }
+
+          else if (finalValue === null) {
+            if (principal < 0 || rate <= -100 || years < 0) throw new Error();
+            finalValue = principal * Math.pow(1 + rate / 100, years);
+            setCalculatedValue(finalInput, finalValue);
+          }
+        } catch {
+          status.textContent = "Please enter valid values.";
+          clearChart();
+          return;
+        }
+      }
+
+      if (
+        principal === null ||
+        rate === null ||
+        years === null ||
+        finalValue === null ||
+        principal < 0 ||
+        years < 0 ||
+        rate <= -100 ||
+        finalValue < 0
+      ) {
+        status.textContent = "Please enter valid values.";
+        clearChart();
+        return;
+      }
+
+      // If all fields are entered, use the inputs to project the final value.
+      if (
+        getNumber(finalInput) !== null &&
+        getNumber(principalInput) !== null &&
+        getNumber(rateInput) !== null &&
+        getNumber(yearsInput) !== null
+      ) {
+        finalValue = principal * Math.pow(1 + rate / 100, years);
+      }
+
+      initialDisplay.textContent = formatCurrency(principal);
+      finalDisplay.textContent = formatCurrency(finalValue);
+      growthDisplay.textContent = formatCurrency(finalValue - principal);
+
+      renderChart(principal, rate, years);
+    }
+
+    function renderChart(principal, rate, years) {
+      const labels = [];
+      const values = [];
+
+      const chartYears = Math.max(1, Math.ceil(years));
+
+      for (let year = 0; year <= chartYears; year++) {
+        labels.push(`Year ${year}`);
+        values.push(principal * Math.pow(1 + rate / 100, year));
+      }
+
+      if (chart) chart.destroy();
+
+      chart = new Chart(document.getElementById("growthChart"), {
+        type: "line",
+        data: {
+          labels,
+          datasets: [{
+            label: "Projected Value",
+            data: values,
+            borderColor: "#2563eb",
+            backgroundColor: "rgba(37, 99, 235, 0.14)",
+            borderWidth: 2,
+            pointRadius: 3,
+            fill: true,
+            tension: 0.3
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          animation: {
+            duration: 250
+          },
+          plugins: {
+            legend: {
+              display: false
+            },
+            tooltip: {
+              callbacks: {
+                label: context => formatCurrency(context.raw)
+              }
+            }
+          },
+          scales: {
+            y: {
+              ticks: {
+                callback: value => formatCurrency(value)
+              }
+            }
+          }
+        }
+      });
+    }
+
+    function clearChart() {
+      initialDisplay.textContent = "—";
+      finalDisplay.textContent = "—";
+      growthDisplay.textContent = "—";
+
+      if (chart) {
+        chart.destroy();
+        chart = null;
+      }
+    }
+
+    [principalInput, rateInput, yearsInput, finalInput]
+      .forEach(input => input.addEventListener("input", calculate));
+
+    calculate();
+  </script>
+</body>
+</html>
