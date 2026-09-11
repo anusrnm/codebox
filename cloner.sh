@@ -28,11 +28,16 @@ mkdir -p "$BASE_DIR"
 cd "$BASE_DIR"
 
 # clones in parallel, strips CRLF safely
-tr -d '\r' < "$REPO_FILE" | \
-xargs -I{} -P "$JOBS" bash -lc '
+tr -d '\r' < "$REPO_FILE" | xargs -I{} -P "$JOBS" bash -lc '
   repo="$1"
   repo="$(echo "$repo" | xargs)"   # trim whitespace
   [ -z "$repo" ] && exit 0
+
+  repo_group="$GROUP"
+  if [[ "$repo" == */* ]]; then
+    repo_group="${repo%%/*}"
+    repo="${repo#*/}"
+  fi
 
   if [ -d "$repo/.git" ]; then
     echo "[SKIP] $repo already exists"
@@ -40,8 +45,8 @@ xargs -I{} -P "$JOBS" bash -lc '
   fi
 
   # try both naming patterns; keep directory name as <repo>
-  dot_repo="${GROUP:+$GROUP.}${repo}"
-  hyphen_repo="${GROUP:+$GROUP-}${repo}"
+  dot_repo="${repo_group:+$repo_group.}${repo}"
+  hyphen_repo="${repo_group:+$repo_group-}${repo}"
   if git clone "git@github.com:${ORG}/${dot_repo}.git" "$repo" 2>/dev/null; then
     echo "[OK] git@github.com:${ORG}/${dot_repo}.git"
   elif git clone "git@github.com:${ORG}/${hyphen_repo}.git" "$repo"; then
