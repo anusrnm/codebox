@@ -407,13 +407,16 @@ async function buildInOrder(projects, quiet = false) {
     let lastLineContent = null; // tracks previously rendered content per line, to skip unchanged lines
     let cursorHidden = false;
 
-    // Interactive log peek support: lets the user navigate the dashboard with
-    // arrow keys and view the tail of a project's build log without disrupting
-    // the running build. Only enabled when both stdin and stdout are a TTY.
+    // Interactive log viewer support. Only enabled when both stdin and stdout
+    // are a TTY so raw key handling and alternate-screen rendering are safe.
     let selectedIndex = 0;
-    let peekActive = false;
-    let peekVisible = false;
-    let peekGeneration = 0;
+    let logViewerActive = false;
+    let logViewerVisible = false;
+    let logViewerGeneration = 0;
+    let logViewerDir = null;
+    let logViewerLines = [];
+    let logViewerOffset = 0;
+    let logViewerColumn = 0;
     const interactiveTTY = displayEnabled
         && !!process.stdin.isTTY
         && !!process.stdout.isTTY
@@ -436,7 +439,7 @@ async function buildInOrder(projects, quiet = false) {
     // even if the process exits unexpectedly (crash, uncaught exception, etc.)
     process.on('exit', showCursor);
     process.on('exit', () => {
-        if (peekVisible) process.stdout.write(EXIT_ALTERNATE_SCREEN);
+        if (logViewerVisible) process.stdout.write(EXIT_ALTERNATE_SCREEN);
     });
 
     function initDisplay() {
@@ -446,7 +449,7 @@ async function buildInOrder(projects, quiet = false) {
         console.log('\n' + '═'.repeat(80));
         console.log('Build Status Dashboard');
         if (interactiveTTY) {
-            console.log('↑/↓ select • Enter/Space peek log • any key closes peek • Ctrl+C cancels build');
+            console.log('↑/↓ select • Enter/Space open log • Ctrl+C cancels build');
         }
         console.log('═'.repeat(80));
         
@@ -472,7 +475,7 @@ async function buildInOrder(projects, quiet = false) {
     
     function updateDisplay() {
         if (!displayEnabled || !displayInitialized) return;
-        if (peekActive) return; // don't repaint the dashboard while a log peek is on screen
+        if (logViewerActive) return; // don't repaint beneath the alternate-screen log viewer
         
         // Move cursor up to first project line (past empty line + footer + all project lines)
         const linesToMoveUp = allProjects.length + 2;
@@ -532,8 +535,8 @@ async function buildInOrder(projects, quiet = false) {
     }
     
     function cleanupDisplay() {
-        if (peekActive) {
-            hidePeek();
+        if (logViewerActive) {
+            closeLogViewer();
         }
         if (displayInterval) {
             clearInterval(displayInterval);
@@ -602,79 +605,131 @@ async function buildInOrder(projects, quiet = false) {
         return name.replace(/[^a-zA-Z0-9._-]/g, '_');
     }
 
-    // ---- Interactive log peek: view the tail of a project's build log on demand ----
-    const PEEK_TAIL_LINES = 30;
-    const PEEK_OVERHEAD_LINES = 3; // header + footer + "press any key" prompt
+    // ---- Interactive full-log viewer ----
+    const LOG_VIEWER_OVERHEAD_LINES = 2; // header + status/help footer
 
     function getLogFilePath(dir) {
         return path.join(logDir, sanitizeFilename(dir) + '.txt');
     }
 
-    async function readLogTail(dir, maxLines = PEEK_TAIL_LINES) {
+    async function readLogContents(dir) {
         try {
             const content = await fs.readFile(getLogFilePath(dir), 'utf8');
             const lines = content.split(/\r?\n/);
             if (lines.length && lines[lines.length - 1] === '') lines.pop(); // drop trailing blank from final \n
-            return lines.slice(-maxLines);
-        } catch {
-            return null; // no log file yet (build hasn't started, or running with --quiet/--dry-run)
+            return lines;
+        } catch (error) {
+            if (error?.code === 'ENOENT') return null;
+            throw error;
         }
     }
 
-    async function showPeek(dir) {
-        if (peekActive || !dir) return;
-        peekActive = true; // suppress dashboard repaints while the peek block is on screen
-        const generation = ++peekGeneration;
-        peekVisible = true;
-        process.stdout.write(ENTER_ALTERNATE_SCREEN);
+    function getLogViewerBodyHeight() {
+        return Math.max(1, (process.stdout.rows || 24) - LOG_VIEWER_OVERHEAD_LINES);
+    }
+
+    function stripTerminalSequences(line) {
+        return line
+            .replace(/\x1b\][^\x07]*(?:\x07|\x1b\\)/g, '')
+            .replace(/\x1b\[[0-?]*[ -/]*[@-~]/g, '');
+    }
+
+    function renderLogViewer() {
+        if (!logViewerActive) return;
 
         const cols = process.stdout.columns || 100;
-        const rows = process.stdout.rows || 24;
-        const maxBodyLines = Math.max(1, rows - PEEK_OVERHEAD_LINES);
-        const tailLines = Math.min(PEEK_TAIL_LINES, maxBodyLines);
-
-        const lines = await readLogTail(dir, tailLines);
-        if (!peekActive || generation !== peekGeneration) return;
-
+        const bodyHeight = getLogViewerBodyHeight();
         const maxLineWidth = Math.max(1, cols - 1);
-        const barWidth = Math.min(80, maxLineWidth);
-        // Keep each logical line on one terminal row for a stable, readable peek.
-        const truncate = (line) => (line.length > maxLineWidth ? line.slice(0, maxLineWidth - 1) + '…' : line);
+        const truncate = (line) => String(line).length > maxLineWidth
+            ? String(line).slice(0, Math.max(0, maxLineWidth - 1)) + '…'
+            : String(line);
 
-        // Truncate (not just pad) long project paths to keep the header on one row.
-        const headerRaw = `── Peek: ${dir} ${lines === null ? '(no log yet)' : `(last ${lines.length} lines)`} `;
-        const header = (headerRaw.length > barWidth ? headerRaw.slice(0, barWidth - 1) + '…' : headerRaw).padEnd(barWidth, '─');
-        const footer = '─'.repeat(barWidth);
-        const body = lines === null
-            ? ['(no output captured yet for this project)']
-            : (lines.length ? lines.map(truncate) : ['(log file is empty)']);
+        const maxOffset = Math.max(0, logViewerLines.length - bodyHeight);
+        const maxContentWidth = logViewerLines.reduce((max, line) => Math.max(max, line.length), 0);
+        const maxColumn = Math.max(0, maxContentWidth - maxLineWidth);
+        logViewerOffset = Math.max(0, Math.min(logViewerOffset, maxOffset));
+        logViewerColumn = Math.max(0, Math.min(logViewerColumn, maxColumn));
+        const visibleLines = logViewerLines.slice(logViewerOffset, logViewerOffset + bodyHeight);
+        const body = visibleLines.length > 0
+            ? visibleLines.map(line => line.slice(logViewerColumn, logViewerColumn + maxLineWidth))
+            : ['(no output captured yet for this project)'];
+        const firstLine = logViewerLines.length > 0 ? logViewerOffset + 1 : 0;
+        const lastLine = logViewerLines.length > 0 ? logViewerOffset + visibleLines.length : 0;
+        const header = truncate(`Log: ${logViewerDir}`);
+        const footer = truncate(
+            `Lines ${firstLine}-${lastLine}/${logViewerLines.length} Col ${logViewerColumn + 1} | ↑/↓ scroll | ←/→ horizontal | PgUp/PgDn | Home/End | r refresh | q/Esc close`
+        );
 
-        const blockLines = [header, ...body, footer, 'Press any key to return to the dashboard...'].map(truncate);
-        process.stdout.write('\x1b[2J\x1b[H' + blockLines.join('\n'));
+        process.stdout.write('\x1b[2J\x1b[H' + [header, ...body, footer].join('\n'));
     }
 
-    function hidePeek() {
-        if (!peekActive) return;
-        peekActive = false;
-        peekGeneration++;
-        if (peekVisible) {
+    async function loadLogViewer({ followEnd = false } = {}) {
+        if (!logViewerActive || !logViewerDir) return;
+        const generation = logViewerGeneration;
+
+        try {
+            const lines = await readLogContents(logViewerDir);
+            if (!logViewerActive || generation !== logViewerGeneration) return;
+            logViewerLines = (lines || []).map(line => stripTerminalSequences(line).replace(/\r/g, ''));
+            if (followEnd) {
+                logViewerOffset = Math.max(0, logViewerLines.length - getLogViewerBodyHeight());
+            }
+        } catch (error) {
+            if (!logViewerActive || generation !== logViewerGeneration) return;
+            logViewerLines = [`Unable to read log: ${error.message}`];
+            logViewerOffset = 0;
+        }
+
+        renderLogViewer();
+    }
+
+    async function openLogViewer(dir) {
+        if (logViewerActive || !dir) return;
+        logViewerActive = true;
+        logViewerDir = dir;
+        logViewerLines = [];
+        logViewerOffset = 0;
+        logViewerColumn = 0;
+        logViewerGeneration++;
+        logViewerVisible = true;
+        process.stdout.write(ENTER_ALTERNATE_SCREEN);
+        renderLogViewer();
+        await loadLogViewer({ followEnd: true });
+    }
+
+    function closeLogViewer() {
+        if (!logViewerActive) return;
+        logViewerActive = false;
+        logViewerGeneration++;
+        logViewerDir = null;
+        logViewerLines = [];
+        logViewerOffset = 0;
+        logViewerColumn = 0;
+        if (logViewerVisible) {
             process.stdout.write(EXIT_ALTERNATE_SCREEN);
-            peekVisible = false;
+            logViewerVisible = false;
         }
         // The underlying dashboard is restored with its original cursor position.
-        // Invalidate every cached row so status changes accumulated during the peek
+        // Invalidate every cached row so status changes accumulated while viewing
         // are repainted immediately, including otherwise unchanged pending entries.
         lastLineContent = new Array(allProjects.length).fill(null);
         if (displayEnabled && displayInitialized && !displayInterval) {
             displayInterval = setInterval(updateDisplay, 100);
         }
-        updateDisplay(); // repaint immediately to reflect any status changes missed while peeking
+        updateDisplay();
     }
 
     function moveSelection(delta) {
-        if (!allProjects.length || peekActive) return;
+        if (!allProjects.length || logViewerActive) return;
         selectedIndex = (selectedIndex + delta + allProjects.length) % allProjects.length;
         updateDisplay(); // repaint right away so the pointer moves without waiting for the next tick
+    }
+
+    function scrollLogViewer(delta) {
+        if (!logViewerActive) return;
+        const maxOffset = Math.max(0, logViewerLines.length - getLogViewerBodyHeight());
+        logViewerOffset = Math.max(0, Math.min(logViewerOffset + delta, maxOffset));
+        renderLogViewer();
     }
 
     let keyboardCleanup = () => {};
@@ -690,8 +745,37 @@ async function buildInOrder(projects, quiet = false) {
                 handleInterrupt();
                 return;
             }
-            if (peekActive) {
-                hidePeek();
+            if (logViewerActive) {
+                const pageSize = getLogViewerBodyHeight();
+                if (key.name === 'escape' || key.name === 'q') {
+                    closeLogViewer();
+                } else if (key.name === 'up' || key.name === 'k') {
+                    scrollLogViewer(-1);
+                } else if (key.name === 'down' || key.name === 'j') {
+                    scrollLogViewer(1);
+                } else if (key.name === 'left' || key.name === 'h') {
+                    logViewerColumn = Math.max(0, logViewerColumn - 8);
+                    renderLogViewer();
+                } else if (key.name === 'right' || key.name === 'l') {
+                    logViewerColumn += 8;
+                    renderLogViewer();
+                } else if (key.name === 'pageup') {
+                    scrollLogViewer(-pageSize);
+                } else if (key.name === 'pagedown' || key.name === 'space') {
+                    scrollLogViewer(pageSize);
+                } else if (key.name === 'home') {
+                    logViewerOffset = 0;
+                    renderLogViewer();
+                } else if (key.name === 'end') {
+                    logViewerOffset = Math.max(0, logViewerLines.length - pageSize);
+                    renderLogViewer();
+                } else if (key.name === 'r') {
+                    loadLogViewer().catch(error => {
+                        logViewerLines = [`Unable to refresh log: ${error.message}`];
+                        logViewerOffset = 0;
+                        renderLogViewer();
+                    });
+                }
                 return;
             }
             if (key.name === 'up' || key.name === 'k') {
@@ -699,13 +783,24 @@ async function buildInOrder(projects, quiet = false) {
             } else if (key.name === 'down' || key.name === 'j') {
                 moveSelection(1);
             } else if (key.name === 'return' || key.name === 'space') {
-                showPeek(allProjects[selectedIndex]).catch(() => {});
+                openLogViewer(allProjects[selectedIndex]).catch(error => {
+                    if (logViewerActive) {
+                        logViewerLines = [`Unable to open log: ${error.message}`];
+                        logViewerOffset = 0;
+                        renderLogViewer();
+                    }
+                });
             }
         };
+        const onResize = () => {
+            if (logViewerActive) renderLogViewer();
+        };
         process.stdin.on('keypress', onKeypress);
+        process.stdout.on('resize', onResize);
 
         keyboardCleanup = () => {
             process.stdin.off('keypress', onKeypress);
+            process.stdout.off('resize', onResize);
             if (process.stdin.isTTY) process.stdin.setRawMode(false);
             process.stdin.pause();
         };
