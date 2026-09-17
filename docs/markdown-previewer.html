@@ -331,6 +331,12 @@
         #preview .render-error { color: #b42318; white-space: pre-wrap; }
         #preview.appearance-code-wrap pre, #preview.appearance-code-wrap pre code { white-space: pre-wrap; word-break: break-word; }
         #preview.appearance-compact-tables { --preview-table-cell-padding: 5px 8px; }
+        #preview.appearance-justify p { text-align: justify; hyphens: auto; text-indent: 1.5em; margin-top: 0; margin-bottom: 0; }
+        #preview.appearance-justify h1 + p, #preview.appearance-justify h2 + p, #preview.appearance-justify h3 + p,
+        #preview.appearance-justify h4 + p, #preview.appearance-justify h5 + p, #preview.appearance-justify h6 + p,
+        #preview.appearance-justify blockquote p, #preview.appearance-justify li p, #preview.appearance-justify dd {
+            text-indent: 0;
+        }
 
         /* --- Settings dialog --- */
         .settings-dialog {
@@ -754,6 +760,7 @@
                             <option value="editorial">Editorial</option>
                             <option value="classic">Classic</option>
                             <option value="technical">Technical</option>
+                            <option value="latex">LaTeX</option>
                             <option value="custom" disabled>Custom</option>
                         </select>
                     </div>
@@ -910,6 +917,7 @@
                         <option value="editorial">Editorial</option>
                         <option value="classic">Classic</option>
                         <option value="technical">Technical</option>
+                        <option value="latex">LaTeX</option>
                         <option value="custom">Custom</option>
                     </select>
                 </div>
@@ -918,6 +926,7 @@
                     <select id="appearance-body-font">
                         <optgroup label="System fonts">
                             <option value="system-sans">System sans</option><option value="system-serif">System serif</option>
+                            <option value="katex-serif">LaTeX (Computer Modern)</option>
                         </optgroup>
                         <optgroup label="Google Fonts">
                             <option value="source-sans-3">Source Sans 3</option><option value="ibm-plex-sans">IBM Plex Sans</option>
@@ -930,6 +939,7 @@
                     <select id="appearance-heading-font">
                         <optgroup label="System fonts">
                             <option value="system-sans">System sans</option><option value="system-serif">System serif</option>
+                            <option value="katex-serif">LaTeX (Computer Modern)</option>
                         </optgroup>
                         <optgroup label="Google Fonts">
                             <option value="source-sans-3">Source Sans 3</option><option value="playfair-display">Playfair Display</option>
@@ -978,6 +988,7 @@
             <div class="appearance-toggles">
                 <label><input id="appearance-code-wrap" type="checkbox"> Wrap code blocks</label>
                 <label><input id="appearance-compact-tables" type="checkbox"> Compact tables</label>
+                <label><input id="appearance-justify" type="checkbox"> Justify & indent (LaTeX-style)</label>
             </div>
             <div class="settings-actions">
                 <button id="appearance-reset-btn" class="secondary" type="button">Reset</button>
@@ -1109,6 +1120,7 @@
         const appearanceParagraphSpacing = document.getElementById('appearance-paragraph-spacing');
         const appearanceCodeWrap = document.getElementById('appearance-code-wrap');
         const appearanceCompactTables = document.getElementById('appearance-compact-tables');
+        const appearanceJustify = document.getElementById('appearance-justify');
         const appearanceResetBtn = document.getElementById('appearance-reset-btn');
         const plantUmlSettingsBtn = document.getElementById('plantuml-settings-btn');
         const plantUmlSettingsDialog = document.getElementById('plantuml-settings-dialog');
@@ -1164,12 +1176,20 @@
                 code: "Consolas, 'Liberation Mono', monospace",
                 bodySize: '14px',
                 codeSize: '13px'
+            },
+            latex: {
+                body: "KaTeX_Main, 'Latin Modern Roman', Georgia, 'Times New Roman', serif",
+                heading: "KaTeX_Main, 'Latin Modern Roman', Georgia, 'Times New Roman', serif",
+                code: "'Fira Mono', Consolas, Menlo, Monaco, monospace",
+                bodySize: '17px',
+                codeSize: '14px'
             }
         };
         const FONT_CHOICES = {
             'system-sans': { family: "'Segoe UI', Tahoma, Geneva, Verdana, sans-serif" },
             'system-serif': { family: "Georgia, 'Times New Roman', serif" },
             'system-mono': { family: "'Fira Mono', Consolas, Menlo, Monaco, monospace" },
+            'katex-serif': { family: "KaTeX_Main, 'Latin Modern Roman', Georgia, 'Times New Roman', serif" },
             courier: { family: "'Courier New', Courier, monospace" },
             'source-sans-3': { family: "'Source Sans 3', sans-serif", query: 'Source+Sans+3:wght@400;600;700' },
             'ibm-plex-sans': { family: "'IBM Plex Sans', sans-serif", query: 'IBM+Plex+Sans:wght@400;600;700' },
@@ -1274,17 +1294,18 @@
                 modern: ['system-sans', 'system-sans', 'system-mono'],
                 editorial: ['system-serif', 'system-sans', 'system-mono'],
                 classic: ['system-serif', 'system-serif', 'courier'],
-                technical: ['system-sans', 'system-sans', 'system-mono']
+                technical: ['system-sans', 'system-sans', 'system-mono'],
+                latex: ['katex-serif', 'katex-serif', 'system-mono']
             }[presetName] || ['system-sans', 'system-sans', 'system-mono'];
             return {
                 preset: FONT_PRESETS[presetName] ? presetName : 'modern',
                 bodyFont: fontKeys[0], headingFont: fontKeys[1], codeFont: fontKeys[2],
                 bodySize: parseInt(preset.bodySize, 10), codeSize: parseInt(preset.codeSize, 10),
-                lineHeight: presetName === 'editorial' ? 1.75 : presetName === 'technical' ? 1.45 : 1.6,
-                width: presetName === 'technical' ? '1000px' : '800px',
+                lineHeight: presetName === 'editorial' ? 1.75 : presetName === 'technical' ? 1.45 : presetName === 'latex' ? 1.4 : 1.6,
+                width: presetName === 'technical' ? '1000px' : presetName === 'latex' ? '680px' : '800px',
                 linkColor: '',
-                paragraphSpacing: presetName === 'technical' ? 10 : 16,
-                codeWrap: false, compactTables: presetName === 'technical'
+                paragraphSpacing: presetName === 'technical' ? 10 : presetName === 'latex' ? 0 : 16,
+                codeWrap: false, compactTables: presetName === 'technical', justify: presetName === 'latex'
             };
         }
 
@@ -1303,7 +1324,7 @@
                 width: allowedWidths.includes(settings.width) ? settings.width : fallback.width,
                 linkColor: /^#[0-9a-f]{6}$/i.test(settings.linkColor || '') ? settings.linkColor : '',
                 paragraphSpacing: Math.min(32, Math.max(4, Number(settings.paragraphSpacing) || fallback.paragraphSpacing)),
-                codeWrap: Boolean(settings.codeWrap), compactTables: Boolean(settings.compactTables)
+                codeWrap: Boolean(settings.codeWrap), compactTables: Boolean(settings.compactTables), justify: Boolean(settings.justify)
             };
         }
 
@@ -1341,6 +1362,7 @@
             document.documentElement.style.setProperty('--preview-paragraph-spacing', currentAppearance.paragraphSpacing + 'px');
             preview.classList.toggle('appearance-code-wrap', currentAppearance.codeWrap);
             preview.classList.toggle('appearance-compact-tables', currentAppearance.compactTables);
+            preview.classList.toggle('appearance-justify', currentAppearance.justify);
             fontPresetSelect.value = currentAppearance.preset;
             if (persist) {
                 localStorage.setItem('previewAppearance', JSON.stringify(currentAppearance));
@@ -1361,6 +1383,7 @@
             appearanceParagraphSpacing.value = currentAppearance.paragraphSpacing;
             appearanceCodeWrap.checked = currentAppearance.codeWrap;
             appearanceCompactTables.checked = currentAppearance.compactTables;
+            appearanceJustify.checked = currentAppearance.justify;
             document.getElementById('appearance-body-size-value').textContent = currentAppearance.bodySize + 'px';
             document.getElementById('appearance-code-size-value').textContent = currentAppearance.codeSize + 'px';
             document.getElementById('appearance-line-height-value').textContent = currentAppearance.lineHeight;
@@ -1375,7 +1398,8 @@
                 linkColor: appearanceLinkColor.value,
                 bodySize: appearanceBodySize.value, codeSize: appearanceCodeSize.value,
                 lineHeight: appearanceLineHeight.value, paragraphSpacing: appearanceParagraphSpacing.value,
-                codeWrap: appearanceCodeWrap.checked, compactTables: appearanceCompactTables.checked
+                codeWrap: appearanceCodeWrap.checked, compactTables: appearanceCompactTables.checked,
+                justify: appearanceJustify.checked
             };
         }
 

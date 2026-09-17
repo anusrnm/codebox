@@ -258,28 +258,31 @@ async function detectMavenCmd(mvndOnly = false) {
     return mavenCmd;
 }
 
+async function resolveBuildCommand(dir) {
+    const customCommand = runMavenCommand.command && String(runMavenCommand.command).trim();
+    if (customCommand) {
+        return customCommand.includes('{dir}') ? customCommand.replaceAll('{dir}', dir) : customCommand;
+    }
+
+    const cmd = await detectMavenCmd(runMavenCommand.mvndOnly);
+    const overrideArgs = runMavenCommand.mavenArgs && String(runMavenCommand.mavenArgs).trim();
+    if (overrideArgs) {
+        return `${cmd} ${overrideArgs}`;
+    }
+
+    const args = dir.includes("container")
+        ? ["-B", "-Pdev-dist", "clean", "package"]
+        : ["-B", "clean", "install"];
+    return `${cmd} ${args.join(' ')}`;
+}
+
 // Function to run a Maven (or custom) command in a given directory
 async function runMavenCommand(dir, logFileStream, dryRun = false, lineIndex = null, lineCount = null, lineStatusArr = null, emitter = null) {
     const EventEmitter = (await import('events')).EventEmitter;
     // Always use a local emitter if not provided
     if (!emitter) emitter = new EventEmitter();
     emitter.setMaxListeners(20); // Increase if needed for high concurrency
-    let fullCmd;
-    // Full custom command override, bypassing Maven entirely; supports a {dir} placeholder
-    const customCommand = runMavenCommand.command && String(runMavenCommand.command).trim();
-    if (customCommand) {
-        fullCmd = customCommand.includes('{dir}') ? customCommand.replaceAll('{dir}', dir) : customCommand;
-    } else {
-        const cmd = await detectMavenCmd(runMavenCommand.mvndOnly);
-        const overrideArgs = runMavenCommand.mavenArgs && String(runMavenCommand.mavenArgs).trim();
-        let args = ["-B", "clean", "install"];
-        if (!overrideArgs) {
-            if (dir.includes("container")) {
-                args = ["-B", "-Pdev-dist", "clean", "package"];
-            }
-        }
-        fullCmd = overrideArgs ? `${cmd} ${overrideArgs}` : `${cmd} ${args.join(' ')}`;
-    }
+    const fullCmd = await resolveBuildCommand(dir);
     // Emit progress event before starting
     emitter.emit('progress', { type: 'start', dir, cmd: fullCmd });
     if (dryRun) {
@@ -363,6 +366,10 @@ async function buildInOrder(projects, quiet = false) {
     const BUILDING = '\uD83D\uDD27'; // 🔧
     const PENDING = '\u23F3'; // ⏳
     const SPINNER = ['⠋','⠙','⠹','⠸','⠼','⠴','⠦','⠧','⠇','⠏'];
+    const HIDE_CURSOR = '\x1b[?25l';
+    const SHOW_CURSOR = '\x1b[?25h';
+    const ENTER_ALTERNATE_SCREEN = '\x1b[?1049h\x1b[2J\x1b[H';
+    const EXIT_ALTERNATE_SCREEN = '\x1b[?1049l';
 
     // Flatten projects to create status display
     function flattenProjects(arr) {
@@ -397,25 +404,67 @@ async function buildInOrder(projects, quiet = false) {
     let spinnerIndex = 0;
     let displayInterval = null;
     let displayInitialized = false;
-    
+    let lastLineContent = null; // tracks previously rendered content per line, to skip unchanged lines
+    let cursorHidden = false;
+
+    // Interactive log peek support: lets the user navigate the dashboard with
+    // arrow keys and view the tail of a project's build log without disrupting
+    // the running build. Only enabled when both stdin and stdout are a TTY.
+    let selectedIndex = 0;
+    let peekActive = false;
+    let peekVisible = false;
+    let peekGeneration = 0;
+    const interactiveTTY = displayEnabled
+        && !!process.stdin.isTTY
+        && !!process.stdout.isTTY
+        && typeof process.stdin.setRawMode === 'function';
+
+    function hideCursor() {
+        if (!cursorHidden) {
+            process.stdout.write(HIDE_CURSOR);
+            cursorHidden = true;
+        }
+    }
+
+    function showCursor() {
+        if (cursorHidden) {
+            process.stdout.write(SHOW_CURSOR);
+            cursorHidden = false;
+        }
+    }
+    // Safety net: never leave the user's terminal with a hidden cursor,
+    // even if the process exits unexpectedly (crash, uncaught exception, etc.)
+    process.on('exit', showCursor);
+    process.on('exit', () => {
+        if (peekVisible) process.stdout.write(EXIT_ALTERNATE_SCREEN);
+    });
+
     function initDisplay() {
         if (!displayEnabled || displayInitialized) return;
         displayInitialized = true;
         
         console.log('\n' + '═'.repeat(80));
         console.log('Build Status Dashboard');
+        if (interactiveTTY) {
+            console.log('↑/↓ select • Enter/Space peek log • any key closes peek • Ctrl+C cancels build');
+        }
         console.log('═'.repeat(80));
         
         // Print all projects with initial status
         allProjects.forEach((dir, idx) => {
             const shortName = path.basename(dir);
-            console.log(`${PENDING} ${shortName.padEnd(40)} [Pending]`);
+            const pointer = interactiveTTY && idx === selectedIndex ? '➤ ' : '  ';
+            console.log(`${pointer}${PENDING} ${shortName.padEnd(40)} [Pending]`);
         });
         
         console.log('═'.repeat(80) + '\n');
         
         // Save cursor position - we'll update relative to start
         displayStartLine = 0;
+        lastLineContent = new Array(allProjects.length).fill(null);
+        
+        // Hide the cursor so redraws don't visibly jump/blink down the list
+        hideCursor();
         
         // Start spinner animation
         displayInterval = setInterval(updateDisplay, 100);
@@ -423,12 +472,14 @@ async function buildInOrder(projects, quiet = false) {
     
     function updateDisplay() {
         if (!displayEnabled || !displayInitialized) return;
+        if (peekActive) return; // don't repaint the dashboard while a log peek is on screen
         
         // Move cursor up to first project line (past empty line + footer + all project lines)
         const linesToMoveUp = allProjects.length + 2;
         process.stdout.write(`\x1b[${linesToMoveUp}A`);
         
-        // Update each project line
+        // Update each project line, but only touch lines whose content actually changed
+        // since the last frame. This avoids needless clear+write churn every 100ms.
         allProjects.forEach((dir, idx) => {
             const status = projectStatus.get(dir);
             const shortName = path.basename(dir);
@@ -453,9 +504,17 @@ async function buildInOrder(projects, quiet = false) {
                 statusText = '[Dry Run]';
             }
             
-            const lineContent = `${symbol} ${shortName.padEnd(40)} ${statusText}`;
-            // Clear line, write content, move to next line
-            process.stdout.write(`\x1b[2K\r${lineContent}\n`);
+            const pointer = interactiveTTY && idx === selectedIndex ? '➤ ' : '  ';
+            const lineContent = `${pointer}${symbol} ${shortName.padEnd(40)} ${statusText}`;
+            if (lastLineContent[idx] !== lineContent) {
+                // Clear line, write content, move to next line
+                process.stdout.write(`\x1b[2K\r${lineContent}\n`);
+                lastLineContent[idx] = lineContent;
+            } else {
+                // Content unchanged (e.g. finished or still-pending project): just advance
+                // the cursor to the next line without rewriting anything.
+                process.stdout.write(`\x1b[1B`);
+            }
         });
         
         // Now cursor is at footer line, move it back to original position (after empty line)
@@ -473,6 +532,9 @@ async function buildInOrder(projects, quiet = false) {
     }
     
     function cleanupDisplay() {
+        if (peekActive) {
+            hidePeek();
+        }
         if (displayInterval) {
             clearInterval(displayInterval);
             displayInterval = null;
@@ -484,6 +546,8 @@ async function buildInOrder(projects, quiet = false) {
             // Cursor is already positioned after the dashboard, just add a newline
             console.log('');
         }
+        showCursor();
+        keyboardCleanup();
     }
     
     function updateProjectStatus(dir, status, details = {}) {
@@ -504,7 +568,24 @@ async function buildInOrder(projects, quiet = false) {
         }
     }
 
+    runMavenCommand.mvndOnly = buildInOrder.mvndOnly || false;
+    runMavenCommand.mavenArgs = buildInOrder.mavenArgs || null;
+    runMavenCommand.command = buildInOrder.command || null;
+
     if (!quiet) {
+        const commands = await Promise.all(allProjects.map(async dir => ({
+            dir,
+            command: await resolveBuildCommand(dir)
+        })));
+        const uniqueCommands = new Set(commands.map(({ command }) => command));
+        if (commands.length === 0) {
+            console.log('Command: (none)');
+        } else if (uniqueCommands.size === 1) {
+            console.log(`Command: ${commands[0].command}`);
+        } else {
+            console.log('Commands:');
+            commands.forEach(({ dir, command }) => console.log(`  ${dir}: ${command}`));
+        }
         initDisplay();
     } else {
         printProjectList(projects);
@@ -519,6 +600,115 @@ async function buildInOrder(projects, quiet = false) {
 
     function sanitizeFilename(name) {
         return name.replace(/[^a-zA-Z0-9._-]/g, '_');
+    }
+
+    // ---- Interactive log peek: view the tail of a project's build log on demand ----
+    const PEEK_TAIL_LINES = 30;
+    const PEEK_OVERHEAD_LINES = 3; // header + footer + "press any key" prompt
+
+    function getLogFilePath(dir) {
+        return path.join(logDir, sanitizeFilename(dir) + '.txt');
+    }
+
+    async function readLogTail(dir, maxLines = PEEK_TAIL_LINES) {
+        try {
+            const content = await fs.readFile(getLogFilePath(dir), 'utf8');
+            const lines = content.split(/\r?\n/);
+            if (lines.length && lines[lines.length - 1] === '') lines.pop(); // drop trailing blank from final \n
+            return lines.slice(-maxLines);
+        } catch {
+            return null; // no log file yet (build hasn't started, or running with --quiet/--dry-run)
+        }
+    }
+
+    async function showPeek(dir) {
+        if (peekActive || !dir) return;
+        peekActive = true; // suppress dashboard repaints while the peek block is on screen
+        const generation = ++peekGeneration;
+        peekVisible = true;
+        process.stdout.write(ENTER_ALTERNATE_SCREEN);
+
+        const cols = process.stdout.columns || 100;
+        const rows = process.stdout.rows || 24;
+        const maxBodyLines = Math.max(1, rows - PEEK_OVERHEAD_LINES);
+        const tailLines = Math.min(PEEK_TAIL_LINES, maxBodyLines);
+
+        const lines = await readLogTail(dir, tailLines);
+        if (!peekActive || generation !== peekGeneration) return;
+
+        const maxLineWidth = Math.max(1, cols - 1);
+        const barWidth = Math.min(80, maxLineWidth);
+        // Keep each logical line on one terminal row for a stable, readable peek.
+        const truncate = (line) => (line.length > maxLineWidth ? line.slice(0, maxLineWidth - 1) + '…' : line);
+
+        // Truncate (not just pad) long project paths to keep the header on one row.
+        const headerRaw = `── Peek: ${dir} ${lines === null ? '(no log yet)' : `(last ${lines.length} lines)`} `;
+        const header = (headerRaw.length > barWidth ? headerRaw.slice(0, barWidth - 1) + '…' : headerRaw).padEnd(barWidth, '─');
+        const footer = '─'.repeat(barWidth);
+        const body = lines === null
+            ? ['(no output captured yet for this project)']
+            : (lines.length ? lines.map(truncate) : ['(log file is empty)']);
+
+        const blockLines = [header, ...body, footer, 'Press any key to return to the dashboard...'].map(truncate);
+        process.stdout.write('\x1b[2J\x1b[H' + blockLines.join('\n'));
+    }
+
+    function hidePeek() {
+        if (!peekActive) return;
+        peekActive = false;
+        peekGeneration++;
+        if (peekVisible) {
+            process.stdout.write(EXIT_ALTERNATE_SCREEN);
+            peekVisible = false;
+        }
+        // The underlying dashboard is restored with its original cursor position.
+        // Invalidate every cached row so status changes accumulated during the peek
+        // are repainted immediately, including otherwise unchanged pending entries.
+        lastLineContent = new Array(allProjects.length).fill(null);
+        if (displayEnabled && displayInitialized && !displayInterval) {
+            displayInterval = setInterval(updateDisplay, 100);
+        }
+        updateDisplay(); // repaint immediately to reflect any status changes missed while peeking
+    }
+
+    function moveSelection(delta) {
+        if (!allProjects.length || peekActive) return;
+        selectedIndex = (selectedIndex + delta + allProjects.length) % allProjects.length;
+        updateDisplay(); // repaint right away so the pointer moves without waiting for the next tick
+    }
+
+    let keyboardCleanup = () => {};
+    if (interactiveTTY) {
+        const readline = await import('readline');
+        readline.emitKeypressEvents(process.stdin);
+        process.stdin.setRawMode(true);
+        process.stdin.resume();
+
+        const onKeypress = (str, key) => {
+            if (!key) return;
+            if (key.ctrl && key.name === 'c') {
+                handleInterrupt();
+                return;
+            }
+            if (peekActive) {
+                hidePeek();
+                return;
+            }
+            if (key.name === 'up' || key.name === 'k') {
+                moveSelection(-1);
+            } else if (key.name === 'down' || key.name === 'j') {
+                moveSelection(1);
+            } else if (key.name === 'return' || key.name === 'space') {
+                showPeek(allProjects[selectedIndex]).catch(() => {});
+            }
+        };
+        process.stdin.on('keypress', onKeypress);
+
+        keyboardCleanup = () => {
+            process.stdin.off('keypress', onKeypress);
+            if (process.stdin.isTTY) process.stdin.setRawMode(false);
+            process.stdin.pause();
+        };
     }
 
     let interrupted = false;
@@ -567,9 +757,6 @@ async function buildInOrder(projects, quiet = false) {
     async function buildProject(dir, lineIndex = null, lineCount = null, lineStatusArr = null) {
         const logFile = path.join(logDir, sanitizeFilename(dir) + '.txt');
         const logStream = (!quiet && !dryRun) ? (await import('fs')).createWriteStream(logFile) : null;
-        runMavenCommand.mvndOnly = buildInOrder.mvndOnly || false;
-        runMavenCommand.mavenArgs = buildInOrder.mavenArgs || null;
-        runMavenCommand.command = buildInOrder.command || null;
         // Always use a local emitter for this build
         const { EventEmitter } = await import('events');
         const localEmitter = new EventEmitter();
@@ -789,6 +976,13 @@ if (import.meta.main) {
         }
         return true;
     });
+
+    const unknownOptions = filteredArgs.filter(arg => arg.startsWith('--') && arg !== '--file');
+    if (unknownOptions.length > 0) {
+        console.error(`Unknown option${unknownOptions.length > 1 ? 's' : ''}: ${unknownOptions.join(', ')}`);
+        printUsage();
+        process.exit(1);
+    }
 
     if (filteredArgs.length === 0) {
         console.error("No input provided.");
