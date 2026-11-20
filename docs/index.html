@@ -32,16 +32,20 @@
             background-color: var(--primary);
             color: var(--text);
             line-height: 1.6;
+            display: grid;
+            grid-template-columns: minmax(0, 1.15fr) minmax(360px, 0.85fr);
+            align-content: start;
         }
 
         /* Navigation */
         nav {
+            grid-column: 1 / -1;
             position: sticky;
             top: 0;
             background: rgba(13, 17, 23, 0.95);
             backdrop-filter: blur(10px);
             border-bottom: 1px solid var(--border);
-            padding: 1rem 2rem;
+            padding: 0.3rem 1rem;
             z-index: 1000;
         }
 
@@ -54,7 +58,7 @@
         }
 
         .nav-logo {
-            font-size: 1.5rem;
+            font-size: 1.25rem;
             font-weight: bold;
             color: var(--accent);
             text-decoration: none;
@@ -62,7 +66,7 @@
 
         .nav-links {
             display: flex;
-            gap: 2rem;
+            gap: 1.25rem;
             list-style: none;
         }
 
@@ -76,104 +80,40 @@
             color: var(--accent-hover);
         }
 
-        /* Hero Section */
-        .hero {
-            background: linear-gradient(135deg, rgba(88, 166, 255, 0.1) 0%, rgba(63, 185, 80, 0.05) 100%);
-            border-bottom: 1px solid var(--border);
-            padding: 6rem 2rem;
-            text-align: center;
-        }
-
-        .hero-container {
-            max-width: 900px;
-            margin: 0 auto;
-        }
-
-        .hero h1 {
-            font-size: 3.5rem;
-            margin-bottom: 1rem;
-            background: linear-gradient(135deg, var(--accent) 0%, var(--success) 100%);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            background-clip: text;
-        }
-
-        .hero p {
-            font-size: 1.25rem;
-            color: var(--text-secondary);
-            margin-bottom: 2rem;
-            line-height: 1.8;
-        }
-
-        .hero-buttons {
-            display: flex;
-            gap: 1rem;
-            justify-content: center;
-            flex-wrap: wrap;
-        }
-
-        .btn {
-            padding: 0.75rem 1.5rem;
-            border-radius: 6px;
-            text-decoration: none;
-            font-weight: 600;
-            transition: all 0.3s;
-            border: 1px solid transparent;
-            cursor: pointer;
-        }
-
-        .btn-primary {
-            background-color: var(--accent);
-            color: var(--primary);
-        }
-
-        .btn-primary:hover {
-            background-color: var(--accent-hover);
-            transform: translateY(-2px);
-        }
-
-        .btn-secondary {
-            background-color: transparent;
-            color: var(--accent);
-            border-color: var(--accent);
-        }
-
-        .btn-secondary:hover {
-            background-color: rgba(88, 166, 255, 0.1);
-            transform: translateY(-2px);
-        }
-
         /* Main Content */
         .container {
-            max-width: 1200px;
+            max-width: 100%;
             margin: 0 auto;
-            padding: 0 2rem;
+            padding: 0;
         }
 
         /* Projects Section */
         .projects {
-            padding: 4rem 2rem;
+            grid-column: 1;
+            min-width: 0;
+            padding: 0.65rem 1.25rem;
             border-bottom: 1px solid var(--border);
         }
 
         .section-title {
-            font-size: 2.5rem;
-            margin-bottom: 3rem;
+            font-size: 1.45rem;
+            line-height: 1.2;
+            margin-bottom: 0.45rem;
             text-align: center;
         }
 
         .projects-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-            gap: 2rem;
-            margin-bottom: 3rem;
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+            gap: 0.45rem;
+            margin-bottom: 0;
         }
 
         .project-card {
             background: var(--secondary);
             border: 1px solid var(--border);
             border-radius: 6px;
-            padding: 1.5rem;
+            padding: 0.5rem;
             transition: all 0.3s;
             position: relative;
             overflow: hidden;
@@ -210,67 +150,79 @@
 
         .project-card h3 {
             color: var(--accent);
-            margin-bottom: 0.5rem;
-            font-size: 1.25rem;
+            margin-bottom: 0.25rem;
+            font-size: 1rem;
+            line-height: 1.2;
         }
 
         .project-card p {
             color: var(--text-secondary);
-            margin-bottom: 1rem;
-            font-size: 0.95rem;
+            margin-bottom: 0.3rem;
+            font-size: 0.72rem;
+            line-height: 1.2;
         }
 
         .project-tags {
             display: flex;
-            gap: 0.5rem;
-            flex-wrap: wrap;
+            gap: 0.12rem;
+            flex-wrap: nowrap;
         }
 
         .tag {
             background: rgba(88, 166, 255, 0.1);
             color: var(--accent);
-            padding: 0.25rem 0.75rem;
+            padding: 0.05rem 0.25rem;
             border-radius: 20px;
-            font-size: 0.8rem;
+            font-size: 0.58rem;
             border: 1px solid var(--accent);
         }
 
         /* Features Section */
         .features {
-            padding: 4rem 2rem;
+            grid-column: 2;
+            padding: 0.35rem 1rem;
             border-bottom: 1px solid var(--border);
         }
 
         .features-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-            gap: 2rem;
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+            gap: 0.35rem;
         }
 
         .feature-item {
-            text-align: center;
+            display: grid;
+            grid-template-columns: auto 1fr;
+            align-items: center;
+            column-gap: 0.35rem;
+            text-align: left;
         }
 
         .feature-icon {
-            font-size: 2.5rem;
-            margin-bottom: 1rem;
+            grid-row: 1 / 3;
+            font-size: 1.1rem;
+            margin-bottom: 0;
         }
 
         .feature-item h3 {
-            margin-bottom: 0.5rem;
+            margin-bottom: 0;
+            font-size: 0.8rem;
             color: var(--accent);
         }
 
         .feature-item p {
+            grid-column: 2;
             color: var(--text-secondary);
-            font-size: 0.95rem;
+            font-size: 0.65rem;
+            line-height: 1.2;
         }
 
         /* Footer */
         footer {
+            grid-column: 1 / -1;
             background: var(--secondary);
             border-top: 1px solid var(--border);
-            padding: 3rem 2rem;
+            padding: 0.35rem 1rem;
             text-align: center;
         }
 
@@ -280,13 +232,13 @@
         }
 
         .footer-links {
-            margin-bottom: 1rem;
+            margin-bottom: 0.25rem;
         }
 
         .footer-links a {
             color: var(--accent);
             text-decoration: none;
-            margin: 0 1rem;
+            margin: 0 0.5rem;
             transition: color 0.3s;
         }
 
@@ -296,56 +248,59 @@
 
         .footer-text {
             color: var(--text-secondary);
-            font-size: 0.9rem;
+            font-size: 0.75rem;
         }
 
         /* Interest Lab */
         .interest {
-            padding: 4rem 2rem;
+            grid-column: 2;
+            min-width: 0;
+            padding: 1rem 1.25rem;
             border-bottom: 1px solid var(--border);
             background: linear-gradient(135deg, rgba(88, 166, 255, 0.06) 0%, rgba(63, 185, 80, 0.05) 100%);
         }
 
         .interest .section-title {
-            margin-bottom: 1rem;
+            margin-bottom: 0.35rem;
         }
 
         .section-lead {
             color: var(--text-secondary);
             text-align: center;
-            margin-bottom: 2rem;
-            font-size: 1.05rem;
+            margin-bottom: 0.65rem;
+            font-size: 0.85rem;
+            line-height: 1.4;
         }
 
         .interest-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
-            gap: 1.5rem;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 0.5rem;
         }
 
         .panel {
             background: var(--secondary);
             border: 1px solid var(--border);
             border-radius: 10px;
-            padding: 1.5rem;
-            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.25);
+            padding: 0.75rem;
+            box-shadow: 0 6px 18px rgba(0, 0, 0, 0.2);
         }
 
         .panel h3 {
             color: var(--accent);
-            margin-bottom: 1rem;
+            margin-bottom: 0.4rem;
         }
 
         .controls-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
-            gap: 1rem;
+            grid-template-columns: 1fr;
+            gap: 0.35rem;
         }
 
         .field {
             display: flex;
             flex-direction: column;
-            gap: 0.35rem;
+            gap: 0.15rem;
         }
 
         .field label {
@@ -365,7 +320,7 @@
             background: var(--primary);
             border: 1px solid var(--border);
             color: var(--text);
-            padding: 0.6rem 0.75rem;
+            padding: 0.35rem 0.5rem;
             border-radius: 6px;
             outline: none;
         }
@@ -377,15 +332,15 @@
 
         .chips {
             display: flex;
-            gap: 0.5rem;
+            gap: 0.35rem;
             flex-wrap: wrap;
-            margin: 1rem 0 0.5rem;
+            margin: 0.5rem 0 0.25rem;
         }
 
         .chip {
             background: rgba(88, 166, 255, 0.12);
             color: var(--accent);
-            padding: 0.4rem 0.75rem;
+            padding: 0.25rem 0.55rem;
             border-radius: 999px;
             border: 1px solid var(--border);
             font-size: 0.85rem;
@@ -394,68 +349,69 @@
 
         .results-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-            gap: 1rem;
-            margin: 1rem 0 1.5rem;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 0.5rem;
+            margin: 0.5rem 0;
         }
 
         .metric {
             background: var(--primary);
             border: 1px solid var(--border);
             border-radius: 8px;
-            padding: 1rem;
+            padding: 0.5rem;
         }
 
         .metric h4 {
             color: var(--text-secondary);
-            font-size: 0.95rem;
-            margin-bottom: 0.35rem;
+            font-size: 0.8rem;
+            margin-bottom: 0.1rem;
         }
 
         .metric .value {
-            font-size: 1.4rem;
+            font-size: 1.1rem;
             font-weight: 700;
         }
 
         .note {
             color: var(--text-secondary);
-            font-size: 0.9rem;
-            margin-top: 0.5rem;
+            font-size: 0.75rem;
+            line-height: 1.35;
+            margin-top: 0.25rem;
         }
 
         /* Responsive */
+        @media (max-width: 1100px) {
+            body {
+                grid-template-columns: minmax(0, 1fr);
+            }
+
+            .projects,
+            .interest,
+            .features {
+                grid-column: 1;
+            }
+
+            .projects-grid {
+                grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+            }
+
+            .features-grid {
+                grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            }
+
+            .controls-grid {
+                grid-template-columns: repeat(3, minmax(0, 1fr));
+            }
+        }
+
         @media (max-width: 768px) {
-            .hero h1 {
-                font-size: 2rem;
-            }
-
-            .hero p {
-                font-size: 1rem;
-            }
-
             .nav-links {
-                gap: 1rem;
+                gap: 0.65rem;
                 font-size: 0.9rem;
-            }
-
-            .hero-buttons {
-                flex-direction: column;
-            }
-
-            .btn {
-                width: 100%;
             }
 
             .projects-grid {
                 grid-template-columns: 1fr;
-                margin-left: auto;
-                margin-right: auto;
-            }
-
-            .project-card {
-                margin-left: auto;
-                margin-right: auto;
-                max-width: 100%;
             }
 
             .interest-grid {
@@ -467,16 +423,18 @@
             }
 
             .results-grid {
-                grid-template-columns: 1fr;
-            }
-
-            .panel {
-                margin-left: auto;
-                margin-right: auto;
+                grid-template-columns: repeat(2, minmax(0, 1fr));
             }
 
             .features-grid {
-                grid-template-columns: 1fr;
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+            }
+
+            .projects,
+            .interest,
+            .features {
+                padding-left: 1rem;
+                padding-right: 1rem;
             }
         }
 
@@ -516,18 +474,6 @@
             </ul>
         </div>
     </nav>
-
-    <!-- Hero Section -->
-    <section class="hero">
-        <div class="hero-container">
-            <h1>CodeBox</h1>
-            <p>A diverse collection of utilities, tools, and applications spanning multiple programming languages. Perfect for learning, experimenting, and building.</p>
-            <div class="hero-buttons">
-                <a href="https://github.com/anusrnm/codebox" class="btn btn-primary">View on GitHub</a>
-                <a href="#projects" class="btn btn-secondary">Explore Projects</a>
-            </div>
-        </div>
-    </section>
 
     <!-- Projects Section -->
     <section class="projects" id="projects">
