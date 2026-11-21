@@ -337,6 +337,60 @@
         #preview.appearance-justify blockquote p, #preview.appearance-justify li p, #preview.appearance-justify dd {
             text-indent: 0;
         }
+        #preview.news-article-mode {
+            background: #f7f5ef;
+            color: #171717;
+        }
+        #preview.news-article-mode .news-article {
+            max-width: 760px;
+            min-height: 100%;
+            margin: 0 auto;
+            padding: 48px 56px 64px;
+            box-sizing: border-box;
+            background: #fff;
+            color: #171717;
+            border-inline: 1px solid #e3dfd5;
+            box-shadow: 0 4px 18px rgba(0, 0, 0, 0.06);
+        }
+        #preview.news-article-mode .news-article > h1 {
+            max-width: 680px;
+            margin: 0 0 18px;
+            padding-bottom: 18px;
+            border-bottom: 3px solid #171717;
+            color: #111;
+            font-family: Georgia, 'Times New Roman', serif;
+            font-size: clamp(2.25rem, 5vw, 4rem);
+            line-height: 0.98;
+            letter-spacing: -0.035em;
+        }
+        #preview.news-article-mode .news-article > h1 + p {
+            margin: 22px 0 26px;
+            color: #343434;
+            font-family: Georgia, 'Times New Roman', serif;
+            font-size: 1.25rem;
+            line-height: 1.45;
+            font-weight: 600;
+        }
+        #preview.news-article-mode .news-article > p {
+            color: #292929;
+            font-family: Georgia, 'Times New Roman', serif;
+            font-size: 1.08rem;
+            line-height: 1.72;
+        }
+        #preview.news-article-mode .news-article > h2,
+        #preview.news-article-mode .news-article > h3 {
+            color: #171717;
+            font-family: Georgia, 'Times New Roman', serif;
+        }
+        #preview.news-article-mode .news-article > blockquote {
+            border-left: 4px solid #b22222;
+            background: #faf7f2;
+            font-family: Georgia, 'Times New Roman', serif;
+        }
+        #news-article-btn.active {
+            background: var(--accent);
+            color: #fff;
+        }
 
         /* --- Settings dialog --- */
         .settings-dialog {
@@ -628,6 +682,7 @@
             .appearance-field-wide { grid-column: auto; }
             .appearance-toggles { grid-template-columns: 1fr; }
             #preview .latex-document { min-height: 0; padding: 28px 20px !important; }
+            #preview.news-article-mode .news-article { padding: 32px 24px 48px; border-inline: none; }
             /* Hamburger: collapse toolbar into wrap */
         }
 
@@ -739,6 +794,7 @@
         </div>
         <div class="toolbar-group" role="group" aria-label="View actions">
             <button id="zen-btn" class="icon-button" title="Toggle zen mode" aria-label="Toggle zen mode"><i data-lucide="expand"></i></button>
+            <button id="news-article-btn" class="icon-button" title="Render as news article" aria-label="Render as news article" aria-pressed="false"><i data-lucide="newspaper"></i></button>
             <button id="toc-toggle" class="icon-button" title="Toggle table of contents" aria-label="Toggle Table of Contents"
                 aria-controls="toc-panel" aria-expanded="false"><i data-lucide="list-tree"></i></button>
             <button id="diagnostics-btn" class="icon-button" title="Review document diagnostics" aria-label="Review document diagnostics">
@@ -1087,6 +1143,7 @@
         const openFileInput = document.getElementById('open-file-input');
         const zenBtn = document.getElementById('zen-btn');
         const zenExitBtn = document.getElementById('zen-exit-btn');
+        const newsArticleBtn = document.getElementById('news-article-btn');
         const tocPanel = document.getElementById('toc-panel');
         const tocToggle = document.getElementById('toc-toggle');
         const tocList = document.getElementById('toc-list');
@@ -1139,6 +1196,7 @@
         let pendingCloseDocumentId = null;
         let isSwitchingDocument = false;
         let renderGeneration = 0;
+        let newsArticleMode = false;
         let diagnostics = [];
         let latexAssetUrls = [];
         let scrollSyncSource = null;
@@ -2101,6 +2159,35 @@
             diagnosticsBtn.setAttribute('aria-label', 'Review LaTeX diagnostics, ' + diagnostics.length + ' issues');
         }
 
+        function unescapeUnicodeEscapes(sourceText) {
+            return sourceText
+                .replace(/\\u([dD][89aAbB][0-9a-fA-F]{2})\\u([dD][c-fC-F][0-9a-fA-F]{2})/g, function(match, high, low) {
+                    const highCode = parseInt(high, 16);
+                    const lowCode = parseInt(low, 16);
+                    return String.fromCodePoint(0x10000 + ((highCode - 0xd800) * 0x400) + (lowCode - 0xdc00));
+                })
+                .replace(/\\u([0-9a-fA-F]{4})/g, function(match, code) {
+                    return String.fromCharCode(parseInt(code, 16));
+                })
+                .replace(/\\x([0-9a-fA-F]{2})/g, function(match, code) {
+                    return String.fromCharCode(parseInt(code, 16));
+                });
+        }
+
+        function renderNewsArticle(sourceText, profileOptions) {
+            const unescapedText = unescapeUnicodeEscapes(sourceText);
+            const processedMarkdown = preprocessMarkdown(unescapedText);
+            const htmlContent = marked.parse(processedMarkdown, profileOptions);
+            preview.innerHTML = DOMPurify.sanitize(htmlContent);
+
+            const article = document.createElement('article');
+            article.className = 'news-article';
+            while (preview.firstChild) article.appendChild(preview.firstChild);
+            preview.replaceChildren(article);
+            preview.classList.add('news-article-mode');
+            return unescapedText;
+        }
+
         // Render the active Markdown or LaTeX document.
         async function renderMarkdown() {
             const generation = ++renderGeneration;
@@ -2112,6 +2199,10 @@
             renderDocumentTabs();
             scheduleWorkspacePersistence();
             if (isLatexDocument(activeDocument)) {
+                newsArticleMode = false;
+                preview.classList.remove('news-article-mode');
+                newsArticleBtn.setAttribute('aria-pressed', 'false');
+                newsArticleBtn.classList.remove('active');
                 await renderLatex(markdownText);
                 if (generation !== renderGeneration) return;
                 updateCounts(markdownText);
@@ -2124,10 +2215,17 @@
             const profileOptions = profileSelect.value === 'commonmark'
                 ? { gfm: false, breaks: false, pedantic: false }
                 : { gfm: true, breaks: false, pedantic: false };
-            const processedMarkdown = preprocessMarkdown(markdownText);
-            const htmlContent = marked.parse(processedMarkdown, profileOptions);
-            preview.innerHTML = DOMPurify.sanitize(htmlContent);
-            annotatePreviewSourceLines(processedMarkdown, profileOptions, markdownText);
+            let processedMarkdown;
+            if (newsArticleMode) {
+                const unescapedText = renderNewsArticle(markdownText, profileOptions);
+                processedMarkdown = preprocessMarkdown(unescapedText);
+            } else {
+                preview.classList.remove('news-article-mode');
+                processedMarkdown = preprocessMarkdown(markdownText);
+                const htmlContent = marked.parse(processedMarkdown, profileOptions);
+                preview.innerHTML = DOMPurify.sanitize(htmlContent);
+                annotatePreviewSourceLines(processedMarkdown, profileOptions, markdownText);
+            }
             renderPlantUML();
 
             // Syntax highlight
@@ -2857,6 +2955,17 @@
         }
         zenBtn.addEventListener('click', function() { setZenMode(true); });
         zenExitBtn.addEventListener('click', function() { setZenMode(false); });
+        newsArticleBtn.addEventListener('click', function() {
+            if (isLatexDocument(getActiveDocument())) {
+                showToast('News article view is available for Markdown documents');
+                return;
+            }
+            newsArticleMode = !newsArticleMode;
+            newsArticleBtn.setAttribute('aria-pressed', String(newsArticleMode));
+            newsArticleBtn.classList.toggle('active', newsArticleMode);
+            toolbarOverflow.open = false;
+            renderMarkdown();
+        });
 
         // --- Split pane resizer ---
         let isResizing = false;
